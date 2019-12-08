@@ -1,10 +1,6 @@
 
-use std::time::Duration;
 
-use embedded_hal::digital::v2::{InputPin, OutputPin};
-use embedded_hal::blocking::spi::{Transfer, Write};
-
-use libusb::{Device, DeviceDescriptor, DeviceHandle, DeviceList};
+use libusb::{DeviceList};
 
 use crate::Error;
 
