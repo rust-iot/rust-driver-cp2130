@@ -1,0 +1,32 @@
+[package]
+name = "driver-cp2130"
+version = "0.1.0"
+authors = ["Ryan Kurte <ryankurte@gmail.com>"]
+description = "libusb based driver for the CP2130 USB-SPI bridge by Silicon Labs"
+license = "MPL-2.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+util = [ "structopt" ]
+default = [ "util" ]
+
+[dependencies]
+libusb = "0.3"
+libc = "0.2.66"
+log = "0.4.8"
+bitflags = "1.2.1"
+
+[dependencies.embedded-hal]
+version = "0.2.3"
+features = [ "unproven" ]
+
+[dependencies.structopt]
+version = "*"
+optional = true
+
+[[bin]]
+name = "cp2130-util"
+path = "src/cli.rs"
+required-features = [ "util" ]
