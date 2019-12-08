@@ -192,14 +192,25 @@ impl <'a> Cp2130<'a> {
         )?;
 
         // TODO: loop for > 64-byte packets
+        let mut index = 0;
 
-        let n = self.handle.read_bulk(
-            self.endpoints.write.address,
-            buff,
-            Duration::from_millis(200),
-        )?;
+        while index < buff.len() {
+            let remainder = if buff.len() > index + 64 {
+                64
+            } else {
+                buff.len() - index
+            };
 
-        Ok(n)
+            let n = self.handle.read_bulk(
+                self.endpoints.write.address,
+                &mut buff[index..index+remainder],
+                Duration::from_millis(200),
+            )?;
+
+            index += n;
+        }
+
+        Ok(index)
     }
 
     pub fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error> {
