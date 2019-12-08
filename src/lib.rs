@@ -4,7 +4,10 @@ use std::io::Error as IoError;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
 extern crate bitflags;
+extern crate byteorder;
+
 extern crate embedded_hal;
 extern crate libusb;
 

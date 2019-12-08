@@ -17,6 +17,7 @@ libusb = "0.3"
 libc = "0.2.66"
 log = "0.4.8"
 bitflags = "1.2.1"
+byteorder = "*"
 
 [dependencies.embedded-hal]
 version = "0.2.3"
