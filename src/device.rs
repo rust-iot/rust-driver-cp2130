@@ -11,7 +11,7 @@ use libusb::{Device, DeviceDescriptor, DeviceHandle, Direction, TransferType};
 use crate::Error;
 
 pub struct Cp2130<'a> {
-    device: Device<'a>,
+    _device: Device<'a>,
     handle: DeviceHandle<'a>,
     info: Info,
     endpoints: Endpoints,
@@ -37,6 +37,32 @@ struct Endpoint {
     setting: u8,
     address: u8
 }
+
+pub enum Commands {
+    GetClockDivider = 0x46,
+    GetEventCounter = 0x44,
+    GetFullThreshold = 0x34,
+    GetGpioChipSelect = 0x24,
+    GetGpioModeAndLevel = 0x22,
+    GetGpioValues = 0x20,
+    GetRtrState = 0x36,
+    GetSpiWord = 0x30,
+    GetSpiDelay = 0x32,
+    GetReadOnlyVersion = 0x11,
+    ResetDevice = 0x10,
+    SetClockDivider = 0x47,
+    SetEventCOunter = 0x45,
+    SetFullThreshold = 0x35,
+    SetGpioChipSelect = 0x25,
+    SetGpioModeAndLevel = 0x23,
+    SetGpioValues = 0x21,
+    SetRtrStop = 0x37,
+    SetSpiWord = 0x31,
+    SetSpiDelay = 0x33,
+}
+
+pub const VID: u16 = 0x10c4;
+pub const PID: u16 = 0x87a0;
 
 bitflags!(
     struct RequestType: u8 {
@@ -121,6 +147,8 @@ impl <'a> Cp2130<'a> {
                         address: endpoint_desc.address(),
                     };
 
+                    debug!("Endpoint: {:?}", e);
+
                     // Find the relevant endpoints
                     match (endpoint_desc.transfer_type(), endpoint_desc.direction()) {
                         (TransferType::Control, _) => control = Some(e),
@@ -133,17 +161,13 @@ impl <'a> Cp2130<'a> {
         }
 
         // Configure endpoints
-        let control = match control {
-            Some(c) => {
-                debug!("Located control endpoint");
-                c
-            },
-            None => {
-                error!("No control endpoint found");
-                return Err(Error::Endpoint)
-            }
+        let control = Endpoint {
+            config: 1,
+            iface: 0,
+            setting: 0,
+            address: 0,
         };
-        control.configure(&mut handle)?;
+        //control.configure(&mut handle)?;
 
         let write = match write {
             Some(c) => {
@@ -172,7 +196,7 @@ impl <'a> Cp2130<'a> {
         let endpoints = Endpoints{control, write, read};
 
         // Create device
-        Ok(Self{device, handle, info, endpoints})
+        Ok(Self{_device: device, handle, info, endpoints})
     }
 
     /// Fetch information for the connected device
@@ -254,7 +278,22 @@ impl <'a> Cp2130<'a> {
         Ok(n)
     }
 
+    /// Fetch the chip version
+    pub fn version(&mut self) -> Result<u16, Error> {
+        let mut buff = [0u8; 2];
 
+        self.handle.read_control(
+            (RequestType::DEVICE_TO_HOST | RequestType::TYPE_VENDOR).bits(), 
+            Commands::GetReadOnlyVersion as u8,
+            0, 0,
+            &mut buff,
+            Duration::from_millis(200)
+        )?;
+
+        let version = LE::read_u16(&buff);
+
+        Ok(version)
+    }
 
 }
 
@@ -262,14 +301,18 @@ impl Endpoint {
     fn configure(&self, handle: &mut DeviceHandle) -> Result<(), Error> {
         // Detach kernel driver if required
         if handle.kernel_driver_active(self.iface)? {
+            debug!("Detaching kernel driver");
             handle.detach_kernel_driver(self.iface)?;
             // TODO: track this and re-enable on closing?
         }
     
         // Configure endpoint
+        debug!("Setting configuration");
         handle.set_active_configuration(self.config)?;
-        handle.claim_interface(self.iface)?;
-        handle.set_alternate_setting(self.iface, self.setting)?;
+        //debug!("Claiming interface");
+        //handle.claim_interface(self.iface)?;
+        //debug!("Setting alternate setting");
+        //handle.set_alternate_setting(self.iface, self.setting)?;
 
         Ok(())
     }

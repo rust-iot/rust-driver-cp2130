@@ -14,7 +14,7 @@ pub struct Manager {
 impl Manager {
     /// Initialise the CP2130 manager (and underlying libusb context)
     /// This must be kept in scope until all CP2130 instances are disposed of
-    pub fn init() -> Result<Manager, Error> {
+    pub fn new() -> Result<Manager, Error> {
         // Attempt to initialise context
         let context = match libusb::Context::new() {
             Ok(v) => v,

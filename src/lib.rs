@@ -15,8 +15,9 @@ extern crate libusb;
 pub mod device;
 pub mod manager;
 
+#[derive(Debug)]
 pub enum Error {
-    Io(IoError),
+//    Io(IoError),
     Usb(libusb::Error),
     NoLanguages,
     Configurations,
