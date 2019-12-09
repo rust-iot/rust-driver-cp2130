@@ -66,6 +66,7 @@ pub const PID: u16 = 0x87a0;
 
 bitflags!(
     struct RequestType: u8 {
+        const HOST_TO_DEVICE = 0b0000_0000;
         const DEVICE_TO_HOST = 0b1000_0000;
 
         const TYPE_STANDARD = 0b0000_0000;
@@ -295,6 +296,37 @@ impl <'a> Cp2130<'a> {
         Ok(version)
     }
 
+    pub fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
+        assert!(pin <= 10);
+        
+        let cmd = [
+            pin,
+            mode as u8,
+            level as u8,
+        ];
+
+        self.handle.write_control(
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            Commands::SetGpioModeAndLevel as u8,
+            0, 0,
+            &cmd,
+            Duration::from_millis(200)
+        )?;
+
+        Ok(())
+    }
+
+}
+
+pub enum GpioMode {
+    Input = 0x00,
+    OpenDrain = 0x01,
+    PushPull = 0x02,
+}
+
+pub enum GpioLevel {
+    Low = 0x00,
+    High = 0x01,
 }
 
 impl Endpoint {

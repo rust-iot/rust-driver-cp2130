@@ -10,7 +10,7 @@ use simplelog::{TermLogger, LevelFilter, TerminalMode};
 
 extern crate driver_cp2130;
 use driver_cp2130::manager::Manager;
-use driver_cp2130::device::Cp2130;
+use driver_cp2130::device::{Cp2130, GpioMode, GpioLevel};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "cp2130-util")]
@@ -40,7 +40,16 @@ pub struct Options {
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
-    Version
+    Version,
+    SetOutput {
+        #[structopt(long, default_value="6")]
+        /// GPIO pin index
+        pin: u8,
+
+        #[structopt(long)]
+        /// GPIO pin state
+        state: bool,
+    }
 }
 
 fn parse_hex(src: &str) -> Result<u16, ParseIntError> {
@@ -96,6 +105,12 @@ fn main() {
         Command::Version => {
             let v = cp2130.version().unwrap();
             info!("Device version: {}", v);
+        },
+        Command::SetOutput{pin, state} => {
+            match state {
+                true => cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::High).unwrap(),
+                false => cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::Low).unwrap(),
+            }
         }
     }
 
