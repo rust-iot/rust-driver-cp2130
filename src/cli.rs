@@ -40,7 +40,9 @@ pub struct Options {
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
+    /// Fetch the chip version
     Version,
+    /// Set a GPIO output
     SetOutput {
         #[structopt(long, default_value="6")]
         /// GPIO pin index
@@ -49,6 +51,16 @@ pub enum Command {
         #[structopt(long)]
         /// GPIO pin state
         state: bool,
+    },
+    /// Read a GPIO input
+    GetInput {
+        #[structopt(long, default_value="6")]
+        /// GPIO pin index
+        pin: u8,
+
+        #[structopt(long)]
+        /// Reconfigure the pin in input mode
+        configure: bool,
     }
 }
 
@@ -111,6 +123,13 @@ fn main() {
                 true => cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::High).unwrap(),
                 false => cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::Low).unwrap(),
             }
+        },
+        Command::GetInput{pin, configure} => {
+            if configure {
+                cp2130.set_gpio_mode_level(pin, GpioMode::Input, GpioLevel::Low).unwrap();
+            }
+            let v = cp2130.get_gpio_level(pin).unwrap();
+            info!("Pin: {} value: {}", pin, v);
         }
     }
 

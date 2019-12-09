@@ -80,6 +80,8 @@ bitflags!(
     }
 );
 
+
+
 pub enum TransferCommand {
     Read        = 0x00,
     Write       = 0x01,
@@ -316,7 +318,67 @@ impl <'a> Cp2130<'a> {
         Ok(())
     }
 
+    pub fn get_gpio_values(&mut self) -> Result<GpioLevels, Error> {
+        let mut buff = [0u8; 2];
+
+        self.handle.read_control(
+            (RequestType::DEVICE_TO_HOST | RequestType::TYPE_VENDOR).bits(), 
+            Commands::GetGpioValues as u8,
+            0, 0,
+            &mut buff,
+            Duration::from_millis(200)
+        )?;
+
+        // Inexplicably big endian here
+        let values = BE::read_u16(&buff);
+
+        Ok(GpioLevels::from_bits_truncate(values))
+    }
+
+    pub fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
+        assert!(pin <= 10);
+
+        let levels = self.get_gpio_values()?;
+
+        let v = match pin {
+            0 => levels.contains(GpioLevels::GPIO_0),
+            1 => levels.contains(GpioLevels::GPIO_1),
+            2 => levels.contains(GpioLevels::GPIO_2),
+            3 => levels.contains(GpioLevels::GPIO_3),
+            4 => levels.contains(GpioLevels::GPIO_4),
+            5 => levels.contains(GpioLevels::GPIO_5),
+            6 => levels.contains(GpioLevels::GPIO_6),
+            7 => levels.contains(GpioLevels::GPIO_7),
+            8 => levels.contains(GpioLevels::GPIO_8),
+            9 => levels.contains(GpioLevels::GPIO_9),
+            10 => levels.contains(GpioLevels::GPIO_10),
+            _ => panic!("invalid pin {}", pin),
+        };
+
+        Ok(v)
+    }
+
 }
+
+
+bitflags!(
+    /// Gpio PIN masks for multiple pin operations
+    /// The endianness of this varies depending on where it is used...
+    pub struct GpioLevels: u16 {
+        const GPIO_10 = (1 << 14);
+        const GPIO_9  = (1 << 13);
+        const GPIO_8  = (1 << 12);
+        const GPIO_7  = (1 << 11);
+        const GPIO_6  = (1 << 10);
+        const GPIO_5  = (1 << 8);
+
+        const GPIO_4  = (1 << 7);
+        const GPIO_3  = (1 << 6);
+        const GPIO_2  = (1 << 5);
+        const GPIO_1  = (1 << 4);
+        const GPIO_0  = (1 << 3);
+    }
+);
 
 pub enum GpioMode {
     Input = 0x00,
