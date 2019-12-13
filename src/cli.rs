@@ -1,3 +1,7 @@
+//! CP2130 Driver CLI
+//! 
+//! 
+//! Copyright 2019 Ryan Kurte
 
 extern crate structopt;
 use structopt::StructOpt;
@@ -8,7 +12,7 @@ use simplelog::{TermLogger, LevelFilter, TerminalMode};
 
 extern crate driver_cp2130;
 use driver_cp2130::manager::{Manager, Filter};
-use driver_cp2130::device::{Cp2130, GpioMode, GpioLevel};
+use driver_cp2130::{Cp2130, Device, GpioMode, GpioLevel};
 
 extern crate hex;
 extern crate rand;

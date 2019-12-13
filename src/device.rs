@@ -1,23 +1,17 @@
+//! CP2130 Driver Device Definitions
+//! 
+//! 
+//! Copyright 2019 Ryan Kurte
 
 use std::time::Duration;
 use std::str::FromStr;
 
+use byteorder::{LE, BE, ByteOrder};
 
-use byteorder::{LE, BE, ByteOrder, ReadBytesExt, WriteBytesExt};
-
-use embedded_hal::digital::v2::{InputPin, OutputPin};
-use embedded_hal::blocking::spi::{Transfer, Write};
-
-use libusb::{Device, DeviceDescriptor, DeviceHandle, Direction, TransferType};
+use libusb::{Device as UsbDevice, DeviceDescriptor, DeviceHandle, Direction, TransferType};
 
 use crate::Error;
 
-pub struct Cp2130<'a> {
-    _device: Device<'a>,
-    handle: DeviceHandle<'a>,
-    info: Info,
-    endpoints: Endpoints,
-}
 #[derive(Debug, Clone, PartialEq)]
 pub struct Info {
     manufacturer: String,
@@ -25,22 +19,9 @@ pub struct Info {
     serial: String,
 }
 
-#[derive(Debug)]
-pub struct Endpoints {
-    control: Endpoint,
-    read: Endpoint,
-    write: Endpoint,
-}
 
-#[derive(Debug, PartialEq, Clone)]
-struct Endpoint {
-    config: u8,
-    iface: u8,
-    setting: u8,
-    address: u8
-}
-
-#[derive(Debug, PartialEq, Clone)]
+/// CP2130 command enumeration
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Commands {
     GetClockDivider = 0x46,
     GetEventCounter = 0x44,
@@ -64,11 +45,15 @@ pub enum Commands {
     SetSpiDelay = 0x33,
 }
 
+/// Default CP2130 VID
 pub const VID: u16 = 0x10c4;
+
+/// Default CP2130 PID
 pub const PID: u16 = 0x87a0;
 
 bitflags!(
-    struct RequestType: u8 {
+    /// USB request type flags
+    pub struct RequestType: u8 {
         const HOST_TO_DEVICE = 0b0000_0000;
         const DEVICE_TO_HOST = 0b1000_0000;
 
@@ -103,7 +88,8 @@ bitflags!(
     }
 );
 
-#[derive(Debug, PartialEq, Clone)]
+/// GPIO mode enumeration
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum GpioMode {
     Input = 0x00,
     OpenDrain = 0x01,
@@ -123,7 +109,8 @@ impl FromStr for GpioMode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+/// GPIO level enumeration
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum GpioLevel {
     Low = 0x00,
     High = 0x01,
@@ -141,6 +128,7 @@ impl FromStr for GpioLevel {
     }
 }
 
+/// Transfer command enumeration
 #[derive(Debug, PartialEq, Clone)]
 pub enum TransferCommand {
     Read        = 0x00,
@@ -149,10 +137,60 @@ pub enum TransferCommand {
     ReadWithRTR = 0x04,
 }
 
+/// Inner struct contains CP2130 IO functions
+/// This is used to split SPI and GPIO components
+pub(crate) struct Inner<'a> {
+    _device: UsbDevice<'a>,
+    handle: DeviceHandle<'a>,
+    endpoints: Endpoints,
+}
 
-impl <'a> Cp2130<'a> {
+
+/// Device trait provides methods directly on the CP2130
+pub trait Device {
+    /// Read from the SPI device
+    fn spi_read(&mut self, buff: &mut [u8]) -> Result<usize, Error>;
+    
+    /// Write to the SPI device
+    fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error>;
+
+    // Transfer (write-read) to and from the SPI device
+    fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error>;
+    
+    /// Fetch the CP2130 chip version
+    fn version(&mut self) -> Result<u16, Error> ;
+
+    /// Set the mode and level for a given GPIO pin
+    fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error>;
+    
+    /// Fetch the values for all GPIO pins
+    fn get_gpio_values(&mut self) -> Result<GpioLevels, Error>;
+    
+    /// Fetch the value for a given GPIO pin
+    fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error>;
+}
+
+/// Device specific endpoints
+/// TODO: given it's one device this could all be hard-coded
+#[derive(Debug)]
+struct Endpoints {
+    control: Endpoint,
+    read: Endpoint,
+    write: Endpoint,
+}
+
+/// Internal endpoint representations
+#[derive(Debug, PartialEq, Clone)]
+struct Endpoint {
+    config: u8,
+    iface: u8,
+    setting: u8,
+    address: u8
+}
+
+impl <'a> Inner<'a> {
     /// Create a new CP2130 instance from a libusb device and descriptor
-    pub fn new(device: Device<'a>, descriptor: DeviceDescriptor) -> Result<Self, Error> {
+    pub fn new(device: UsbDevice<'a>, descriptor: DeviceDescriptor) -> Result<(Self, Info), Error> {
         let timeout = Duration::from_millis(200);
         
         // Fetch device handle
@@ -163,7 +201,6 @@ impl <'a> Cp2130<'a> {
                 return Err(Error::Usb(e))
             }
         };
-
 
         // Reset device
         handle.reset()?;
@@ -196,7 +233,7 @@ impl <'a> Cp2130<'a> {
         // Connect to endpoints
         let config_desc = device.config_descriptor(0)?;
         
-        let (mut control, mut write, mut read) = (None, None, None);
+        let (mut write, mut read) = (None, None);
 
         for interface in config_desc.interfaces() {
             for interface_desc in interface.descriptors() {
@@ -214,7 +251,6 @@ impl <'a> Cp2130<'a> {
 
                     // Find the relevant endpoints
                     match (endpoint_desc.transfer_type(), endpoint_desc.direction()) {
-                        (TransferType::Control, _) => control = Some(e),
                         (TransferType::Bulk, Direction::In) => read = Some(e),
                         (TransferType::Bulk, Direction::Out) => write = Some(e),
                         (_, _) => continue,
@@ -259,16 +295,13 @@ impl <'a> Cp2130<'a> {
 
         let endpoints = Endpoints{control, write, read};
 
-        // Create device
-        Ok(Self{_device: device, handle, info, endpoints})
+        Ok((Inner{_device: device, handle, endpoints}, info))
     }
-
-    /// Fetch information for the connected device
-    pub fn info(&self) -> Info {
-        self.info.clone()
-    }
-
-    pub fn spi_read(&mut self, buff: &mut [u8]) -> Result<usize, Error> {
+}
+    
+impl <'a> Device for Inner<'a> {
+    /// Read from the SPI device
+    fn spi_read(&mut self, buff: &mut [u8]) -> Result<usize, Error> {
         let mut cmd = [0u8; 8];
         cmd[2] = TransferCommand::Read as u8;
         LE::write_u32(&mut cmd[4..], buff.len() as u32);
@@ -308,7 +341,8 @@ impl <'a> Cp2130<'a> {
         Ok(index)
     }
 
-    pub fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error> {
+    /// Write to the SPI device
+    fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error> {
 
         let mut cmd = vec![0u8; buff.len() + 8];
 
@@ -330,7 +364,8 @@ impl <'a> Cp2130<'a> {
         Ok(())
     }
 
-    pub fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error> {
+    // Transfer (write-read) to and from the SPI device
+    fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error> {
 
         let mut cmd = vec![0u8; buff_out.len() + 8];
 
@@ -374,8 +409,8 @@ impl <'a> Cp2130<'a> {
         Ok(index)
     }
 
-    /// Fetch the chip version
-    pub fn version(&mut self) -> Result<u16, Error> {
+    /// Fetch the CP2130 chip version
+    fn version(&mut self) -> Result<u16, Error> {
         let mut buff = [0u8; 2];
 
         self.handle.read_control(
@@ -391,7 +426,8 @@ impl <'a> Cp2130<'a> {
         Ok(version)
     }
 
-    pub fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
+    /// Set the mode and level for a given GPIO pin
+    fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
         assert!(pin <= 10);
         
         let cmd = [
@@ -411,7 +447,8 @@ impl <'a> Cp2130<'a> {
         Ok(())
     }
 
-    pub fn get_gpio_values(&mut self) -> Result<GpioLevels, Error> {
+    /// Fetch the values for all GPIO pins
+    fn get_gpio_values(&mut self) -> Result<GpioLevels, Error> {
         let mut buff = [0u8; 2];
 
         self.handle.read_control(
@@ -428,7 +465,8 @@ impl <'a> Cp2130<'a> {
         Ok(GpioLevels::from_bits_truncate(values))
     }
 
-    pub fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
+    /// Fetch the value for a given GPIO pin
+    fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
         assert!(pin <= 10);
 
         let levels = self.get_gpio_values()?;
@@ -450,55 +488,6 @@ impl <'a> Cp2130<'a> {
 
         Ok(v)
     }
-
 }
 
 
-impl <'a> Transfer<u8> for Cp2130<'a> {
-    type Error = Error;
-
-    fn transfer<'w>(&mut self, words: &'w mut [u8] ) -> Result<&'w [u8], Self::Error> {
-        let out = words.to_vec();
-        let _n = self.spi_write_read(&out, words)?;
-        Ok(words)
-    }
-}
-
-impl <'a> Write<u8> for Cp2130<'a> {
-    type Error = Error;
-
-    fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
-        let _n = self.spi_write(words)?;
-        Ok(())
-    }
-}
-
-
-pub struct Gpio {
-
-}
-
-impl InputPin for Gpio {
-    type Error = Error;
-
-    fn is_high(&self) -> Result<bool, Self::Error> {
-        unimplemented!()
-    }
-
-    fn is_low(&self) -> Result<bool, Self::Error> {
-        unimplemented!()
-    }
-}
-
-
-impl OutputPin for Gpio {
-    type Error = Error;
-
-    fn set_high(&mut self) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn set_low(&mut self) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-}

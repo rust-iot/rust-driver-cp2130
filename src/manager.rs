@@ -1,7 +1,11 @@
+//! CP2130 Driver Device Manager
+//! 
+//! 
+//! Copyright 2019 Ryan Kurte
 
 use std::num::ParseIntError;
 
-use libusb::{DeviceList, Device, DeviceDescriptor};
+use libusb::{Device as UsbDevice, DeviceList, DeviceDescriptor};
 use structopt::StructOpt;
 
 use crate::{Error};
@@ -64,7 +68,7 @@ impl Manager {
         Ok(devices)
     }
 
-    pub fn devices_filtered<'b>(&'b mut self, filter: Filter) -> Result<Vec<(Device, DeviceDescriptor)>, Error> {
+    pub fn devices_filtered<'b>(&'b mut self, filter: Filter) -> Result<Vec<(UsbDevice, DeviceDescriptor)>, Error> {
         let devices = self.devices()?;
 
         let mut matches = vec![];

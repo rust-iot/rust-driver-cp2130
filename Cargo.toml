@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Ryan Kurte <ryankurte@gmail.com>"]
 description = "libusb based driver for the CP2130 USB-SPI bridge by Silicon Labs"
 repository = "https://github.com/ryankurte/rust-driver-cp2130"
+keywords = [ "driver", "cp2130", "usb", "spi", "embedded" ]
 license = "MPL-2.0"
 edition = "2018"
 
