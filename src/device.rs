@@ -1,5 +1,7 @@
 
 use std::time::Duration;
+use std::str::FromStr;
+
 
 use byteorder::{LE, BE, ByteOrder, ReadBytesExt, WriteBytesExt};
 
@@ -380,15 +382,42 @@ bitflags!(
     }
 );
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum GpioMode {
     Input = 0x00,
     OpenDrain = 0x01,
     PushPull = 0x02,
 }
 
+impl FromStr for GpioMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "input" => Ok(Self::Input),
+            "open-drain" => Ok(Self::OpenDrain),
+            "push-pull" => Ok(Self::PushPull),
+            _ => Err(format!("Unrecognised GPIO mode, try 'input', 'open-drain', or 'push-pull'")),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum GpioLevel {
     Low = 0x00,
     High = 0x01,
+}
+
+impl FromStr for GpioLevel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "1" | "true" | "high" => Ok(Self::High),
+            "0" | "false" | "low" => Ok(Self::Low),
+            _ => Err(format!("Unrecognised GPIO level, try 'high' or 'low'")),
+        }
+    }
 }
 
 impl Endpoint {

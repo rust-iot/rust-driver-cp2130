@@ -48,9 +48,13 @@ pub enum Command {
         /// GPIO pin index
         pin: u8,
 
-        #[structopt(long)]
-        /// GPIO pin state
-        state: bool,
+        #[structopt(long, default_value="push-pull")]
+        /// GPIO pin mode to set (input, open drain, push-pull)
+        mode: GpioMode,
+
+        #[structopt(default_value="high")]
+        /// GPIO pin state (high, low)
+        state: GpioLevel,
     },
     /// Read a GPIO input
     GetInput {
@@ -59,8 +63,8 @@ pub enum Command {
         pin: u8,
 
         #[structopt(long)]
-        /// Reconfigure the pin in input mode
-        configure: bool,
+        /// GPIO pin mode to set
+        mode: Option<GpioMode>,
     }
 }
 
@@ -118,15 +122,12 @@ fn main() {
             let v = cp2130.version().unwrap();
             info!("Device version: {}", v);
         },
-        Command::SetOutput{pin, state} => {
-            match state {
-                true => cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::High).unwrap(),
-                false => cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::Low).unwrap(),
-            }
+        Command::SetOutput{pin, mode, state} => {
+            cp2130.set_gpio_mode_level(pin, mode, state).unwrap()
         },
-        Command::GetInput{pin, configure} => {
-            if configure {
-                cp2130.set_gpio_mode_level(pin, GpioMode::Input, GpioLevel::Low).unwrap();
+        Command::GetInput{pin, mode} => {
+            if let Some(m) = mode {
+                cp2130.set_gpio_mode_level(pin, m, GpioLevel::Low).unwrap();
             }
             let v = cp2130.get_gpio_level(pin).unwrap();
             info!("Pin: {} value: {}", pin, v);
