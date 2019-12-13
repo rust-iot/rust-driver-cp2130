@@ -32,7 +32,7 @@ pub struct Endpoints {
     write: Endpoint,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 struct Endpoint {
     config: u8,
     iface: u8,
@@ -40,6 +40,7 @@ struct Endpoint {
     address: u8
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum Commands {
     GetClockDivider = 0x46,
     GetEventCounter = 0x44,
@@ -83,7 +84,64 @@ bitflags!(
 );
 
 
+bitflags!(
+    /// Gpio PIN masks for multiple pin operations
+    /// The endianness of this varies depending on where it is used...
+    pub struct GpioLevels: u16 {
+        const GPIO_10 = (1 << 14);
+        const GPIO_9  = (1 << 13);
+        const GPIO_8  = (1 << 12);
+        const GPIO_7  = (1 << 11);
+        const GPIO_6  = (1 << 10);
+        const GPIO_5  = (1 << 8);
 
+        const GPIO_4  = (1 << 7);
+        const GPIO_3  = (1 << 6);
+        const GPIO_2  = (1 << 5);
+        const GPIO_1  = (1 << 4);
+        const GPIO_0  = (1 << 3);
+    }
+);
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum GpioMode {
+    Input = 0x00,
+    OpenDrain = 0x01,
+    PushPull = 0x02,
+}
+
+impl FromStr for GpioMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "input" => Ok(Self::Input),
+            "open-drain" => Ok(Self::OpenDrain),
+            "push-pull" => Ok(Self::PushPull),
+            _ => Err(format!("Unrecognised GPIO mode, try 'input', 'open-drain', or 'push-pull'")),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum GpioLevel {
+    Low = 0x00,
+    High = 0x01,
+}
+
+impl FromStr for GpioLevel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "1" | "true" | "high" => Ok(Self::High),
+            "0" | "false" | "low" => Ok(Self::Low),
+            _ => Err(format!("Unrecognised GPIO level, try 'high' or 'low'")),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum TransferCommand {
     Read        = 0x00,
     Write       = 0x01,
@@ -114,8 +172,8 @@ impl <'a> Cp2130<'a> {
         let languages = handle.read_languages(timeout)?;
         let active_config = handle.active_configuration()?;
 
-        debug!("Active configuration: {}", active_config);
-        debug!("Languages: {:?}", languages);
+        trace!("Active configuration: {}", active_config);
+        trace!("Languages: {:?}", languages);
 
         // Check a language is available
         if languages.len() == 0 {
@@ -152,7 +210,7 @@ impl <'a> Cp2130<'a> {
                         address: endpoint_desc.address(),
                     };
 
-                    debug!("Endpoint: {:?}", e);
+                    trace!("Endpoint: {:?}", e);
 
                     // Find the relevant endpoints
                     match (endpoint_desc.transfer_type(), endpoint_desc.direction()) {
@@ -174,29 +232,30 @@ impl <'a> Cp2130<'a> {
         };
         //control.configure(&mut handle)?;
 
+        // Detach kernel driver if required
+        if handle.kernel_driver_active(control.iface)? {
+            debug!("Detaching kernel driver");
+            handle.detach_kernel_driver(control.iface)?;
+            // TODO: track this and re-enable on closing?
+        }
+
         let write = match write {
-            Some(c) => {
-                debug!("Located write endpoint");
-                c
-            },
+            Some(c) => c,
             None => {
                 error!("No write endpoint found");
                 return Err(Error::Endpoint)
             }
         };
-        write.configure(&mut handle)?;
+        handle.set_active_configuration(write.config)?;
 
         let read = match read {
-            Some(c) => {
-                debug!("Located read endpoint");
-                c
-            },
+            Some(c) => c,
             None => {
                 error!("No read endpoint found");
                 return Err(Error::Endpoint)
             }
         };
-        read.configure(&mut handle)?;
+        handle.set_active_configuration(read.config)?;
 
         let endpoints = Endpoints{control, write, read};
 
@@ -214,6 +273,9 @@ impl <'a> Cp2130<'a> {
         cmd[2] = TransferCommand::Read as u8;
         LE::write_u32(&mut cmd[4..], buff.len() as u32);
 
+
+        trace!("SPI read (cmd: {:?})", cmd);
+
         self.handle.write_bulk(
             self.endpoints.write.address,
             &cmd,
@@ -230,14 +292,18 @@ impl <'a> Cp2130<'a> {
                 buff.len() - index
             };
 
+            debug!("SPI read (i: {}, rem: {})", index, remainder);
+
             let n = self.handle.read_bulk(
-                self.endpoints.write.address,
+                self.endpoints.read.address,
                 &mut buff[index..index+remainder],
                 Duration::from_millis(200),
             )?;
 
             index += n;
         }
+
+        trace!("SPI read done");
 
         Ok(index)
     }
@@ -250,11 +316,16 @@ impl <'a> Cp2130<'a> {
         LE::write_u32(&mut cmd[4..], buff.len() as u32);
         (&mut cmd[8..]).copy_from_slice(buff);
 
+        trace!("SPI write (cmd: {:?})", cmd);
+
         self.handle.write_bulk(
             self.endpoints.write.address,
             &cmd,
             Duration::from_millis(200),
         )?;
+
+
+        trace!("SPI write done");
 
         Ok(())
     }
@@ -267,20 +338,40 @@ impl <'a> Cp2130<'a> {
         LE::write_u32(&mut cmd[4..], buff_out.len() as u32);
         (&mut cmd[8..]).copy_from_slice(buff_out);
 
+        trace!("SPI transfer (cmd: {:?})", cmd);
+
         self.handle.write_bulk(
             self.endpoints.write.address,
             &cmd,
             Duration::from_millis(200),
         )?;
 
-        // TODO: loop for > 64-byte packets
-        let n = self.handle.read_bulk(
-            self.endpoints.write.address,
-            buff_in,
-            Duration::from_millis(200),
-        )?;
+        trace!("SPI transfer await resp");
 
-        Ok(n)
+        // TODO: loop for > 64-byte packets
+        let mut index = 0;
+
+        while index < buff_in.len() {
+            let remainder = if buff_in.len() > index + 64 {
+                64
+            } else {
+                buff_in.len() - index
+            };
+
+            trace!("SPI read (len: {}, index: {}, rem: {})", buff_in.len(), index, remainder);
+
+            let n = self.handle.read_bulk(
+                self.endpoints.read.address,
+                &mut buff_in[index..index+remainder],
+                Duration::from_millis(200),
+            )?;
+
+            index += n;
+        }
+
+        trace!("SPI transfer done");
+
+        Ok(index)
     }
 
     /// Fetch the chip version
@@ -363,97 +454,22 @@ impl <'a> Cp2130<'a> {
 }
 
 
-bitflags!(
-    /// Gpio PIN masks for multiple pin operations
-    /// The endianness of this varies depending on where it is used...
-    pub struct GpioLevels: u16 {
-        const GPIO_10 = (1 << 14);
-        const GPIO_9  = (1 << 13);
-        const GPIO_8  = (1 << 12);
-        const GPIO_7  = (1 << 11);
-        const GPIO_6  = (1 << 10);
-        const GPIO_5  = (1 << 8);
-
-        const GPIO_4  = (1 << 7);
-        const GPIO_3  = (1 << 6);
-        const GPIO_2  = (1 << 5);
-        const GPIO_1  = (1 << 4);
-        const GPIO_0  = (1 << 3);
-    }
-);
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum GpioMode {
-    Input = 0x00,
-    OpenDrain = 0x01,
-    PushPull = 0x02,
-}
-
-impl FromStr for GpioMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "input" => Ok(Self::Input),
-            "open-drain" => Ok(Self::OpenDrain),
-            "push-pull" => Ok(Self::PushPull),
-            _ => Err(format!("Unrecognised GPIO mode, try 'input', 'open-drain', or 'push-pull'")),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum GpioLevel {
-    Low = 0x00,
-    High = 0x01,
-}
-
-impl FromStr for GpioLevel {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "1" | "true" | "high" => Ok(Self::High),
-            "0" | "false" | "low" => Ok(Self::Low),
-            _ => Err(format!("Unrecognised GPIO level, try 'high' or 'low'")),
-        }
-    }
-}
-
-impl Endpoint {
-    fn configure(&self, handle: &mut DeviceHandle) -> Result<(), Error> {
-        // Detach kernel driver if required
-        if handle.kernel_driver_active(self.iface)? {
-            debug!("Detaching kernel driver");
-            handle.detach_kernel_driver(self.iface)?;
-            // TODO: track this and re-enable on closing?
-        }
-    
-        // Configure endpoint
-        debug!("Setting configuration");
-        handle.set_active_configuration(self.config)?;
-        //debug!("Claiming interface");
-        //handle.claim_interface(self.iface)?;
-        //debug!("Setting alternate setting");
-        //handle.set_alternate_setting(self.iface, self.setting)?;
-
-        Ok(())
-    }
-}
-
 impl <'a> Transfer<u8> for Cp2130<'a> {
     type Error = Error;
 
-    fn transfer<'w>(&mut self, _words: &'w mut [u8] ) -> Result<&'w [u8], Self::Error> {
-        unimplemented!()
+    fn transfer<'w>(&mut self, words: &'w mut [u8] ) -> Result<&'w [u8], Self::Error> {
+        let out = words.to_vec();
+        let _n = self.spi_write_read(&out, words)?;
+        Ok(words)
     }
 }
 
 impl <'a> Write<u8> for Cp2130<'a> {
     type Error = Error;
 
-    fn write(&mut self, _words: &[u8] ) -> Result<(), Self::Error> {
-        unimplemented!()
+    fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
+        let _n = self.spi_write(words)?;
+        Ok(())
     }
 }
 

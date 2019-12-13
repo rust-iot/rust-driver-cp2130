@@ -1,6 +1,4 @@
 
-use std::io::Error as IoError;
-
 #[macro_use]
 extern crate log;
 

@@ -1,14 +1,37 @@
 
+use std::num::ParseIntError;
 
-use libusb::{DeviceList};
+use libusb::{DeviceList, Device, DeviceDescriptor};
+use structopt::StructOpt;
 
-use crate::Error;
-
+use crate::{Error};
+use crate::device::{VID, PID};
 
 /// Manager object maintains libusb context and provides
 /// methods for connecting to matching devices
 pub struct Manager {
     context: libusb::Context,
+}
+
+#[derive(Debug, Clone, PartialEq, StructOpt)]
+pub struct Filter {
+    #[structopt(long, default_value="10c4", parse(try_from_str=parse_hex))]
+    /// Device Vendor ID (VID) in hex
+    pub vid: u16,
+
+    #[structopt(long, default_value="87a0", parse(try_from_str=parse_hex))]
+    /// Device Product ID (PID) in hex
+    pub pid: u16,
+}
+
+fn parse_hex(src: &str) -> Result<u16, ParseIntError> {
+    u16::from_str_radix(src, 16)
+}
+
+impl Default for Filter {
+    fn default() -> Self {
+        Filter{vid: VID, pid: PID}
+    }
 }
 
 impl Manager {
@@ -40,4 +63,30 @@ impl Manager {
 
         Ok(devices)
     }
+
+    pub fn devices_filtered<'b>(&'b mut self, filter: Filter) -> Result<Vec<(Device, DeviceDescriptor)>, Error> {
+        let devices = self.devices()?;
+
+        let mut matches = vec![];
+
+        for device in devices.iter() {
+            // Fetch descriptor
+            let device_desc = match device.device_descriptor() {
+                Ok(d) => d,
+                Err(_) => continue
+            };
+    
+            trace!("Device: {:?}", device_desc);
+    
+            // Check for VID/PID match
+            if device_desc.vendor_id() == filter.vid && device_desc.product_id() == filter.pid {
+                matches.push((device, device_desc));
+            }
+        }
+    
+        debug!("Found {} matching devices", matches.len());
+    
+        Ok(matches)
+    }
+
 }

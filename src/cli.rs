@@ -1,6 +1,4 @@
 
-use std::num::ParseIntError;
-
 extern crate structopt;
 use structopt::StructOpt;
 
@@ -9,10 +7,13 @@ extern crate simplelog;
 use simplelog::{TermLogger, LevelFilter, TerminalMode};
 
 extern crate driver_cp2130;
-use driver_cp2130::manager::Manager;
+use driver_cp2130::manager::{Manager, Filter};
 use driver_cp2130::device::{Cp2130, GpioMode, GpioLevel};
 
 extern crate hex;
+extern crate rand;
+use crate::rand::Rng;
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "cp2130-util")]
@@ -22,20 +23,14 @@ pub struct Options {
     #[structopt(subcommand)]
     pub command: Command,
 
+    #[structopt(flatten)]
+    pub filter: Filter,
+
     #[structopt(long, default_value="0")]
     /// Device index (to select from multiple devices)
     pub index: usize,
 
-    #[structopt(long, default_value="10c4", parse(try_from_str=parse_hex))]
-    /// Device Vendor ID (VID) in hex
-    pub vid: u16,
-
-    #[structopt(long, default_value="87a0", parse(try_from_str=parse_hex))]
-    /// Device Product ID (PID) in hex
-    pub pid: u16,
-
-
-    #[structopt(long = "log-level", default_value="debug")]
+    #[structopt(long = "log-level", default_value="info")]
     /// Enable verbose logging
     pub level: LevelFilter,
 }
@@ -59,7 +54,7 @@ pub enum Command {
         state: GpioLevel,
     },
     /// Read a GPIO input
-    GetInput {
+    ReadInput {
         #[structopt(long, default_value="6")]
         /// GPIO pin index
         pin: u8,
@@ -68,22 +63,54 @@ pub enum Command {
         /// GPIO pin mode to set
         mode: Option<GpioMode>,
     },
+    /// Transfer (write-read) to an attached SPI device
     SpiTransfer {
         #[structopt(parse(try_from_str=parse_hex_str))]
-        /// Data to transfer out
-        data: String,
+        /// Data to write (in hex)
+        data: Data,
 
         #[structopt(long, default_value="6")]
         /// SPI CS pin index
         cs_pin: u8,
-    }
+    },
+    /// Write to an attached SPI device
+    SpiWrite {
+        #[structopt(parse(try_from_str=parse_hex_str))]
+        /// Data to write (in hex)
+        data: Data,
+
+        #[structopt(long, default_value="6")]
+        /// SPI CS pin index
+        cs_pin: u8,
+    },
+    /// Read from an attached SPI device
+    SpiRead {
+        #[structopt()]
+        /// Length of data to read
+        len: usize,
+
+        #[structopt(long, default_value="6")]
+        /// SPI CS pin index
+        cs_pin: u8,
+    },
+    /// Test interaction with the CP2130 device
+    Test(TestOpts)
 }
 
-fn parse_hex(src: &str) -> Result<u16, ParseIntError> {
-    u16::from_str_radix(src, 16)
+#[derive(Debug, StructOpt)]
+pub struct TestOpts {
+    #[structopt(long, default_value="0")]
+    /// Pin for GPIO write
+    write_pin: u8,
+
+    #[structopt(long, default_value="1")]
+    /// Pin for GPIO read
+    read_pin: u8,
 }
 
-fn parse_hex_str(src: &str) -> Result<String, hex::FromHexError> {
+type Data = Vec<u8>;
+
+fn parse_hex_str(src: &str) -> Result<Vec<u8>, hex::FromHexError> {
     hex::decode(src)
 }
 
@@ -98,26 +125,7 @@ fn main() {
     let mut m = Manager::new().unwrap();
 
     // Find matching devices
-    let devices = m.devices().unwrap();
-
-    let mut matches = vec![];
-
-    for device in devices.iter() {
-        // Fetch descriptor
-        let device_desc = match device.device_descriptor() {
-            Ok(d) => d,
-            Err(_) => continue
-        };
-
-        trace!("Device: {:?}", device_desc);
-
-        // Check for VID/PID match
-        if device_desc.vendor_id() == opts.vid && device_desc.product_id() == opts.pid {
-            matches.push((device, device_desc));
-        }
-    }
-
-    debug!("Found {} matching devices", matches.len());
+    let mut matches = m.devices_filtered(opts.filter).unwrap();
 
     if matches.len() < opts.index {
         error!("Device index ({}) exceeds number of discovered devices ({})",
@@ -140,7 +148,7 @@ fn main() {
         Command::SetOutput{pin, mode, state} => {
             cp2130.set_gpio_mode_level(pin, mode, state).unwrap()
         },
-        Command::GetInput{pin, mode} => {
+        Command::ReadInput{pin, mode} => {
             if let Some(m) = mode {
                 cp2130.set_gpio_mode_level(pin, m, GpioLevel::Low).unwrap();
             }
@@ -148,17 +156,112 @@ fn main() {
             info!("Pin: {} value: {}", pin, v);
         },
         Command::SpiTransfer{data, cs_pin} => {
-            cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+            info!("Transmit: {}", hex::encode(&data));
 
-            let cmd = data.as_bytes();
-            let mut buff = vec![0u8; cmd.len()];
-            cp2130.spi_write_read(data.as_bytes(), &mut buff).unwrap();
+            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
 
+            let mut buff = vec![0u8; data.len()];
+            cp2130.spi_write_read(&data, &mut buff).unwrap();
+
+            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
+
+            info!("Received: {}", hex::encode(buff));
+        },
+        Command::SpiRead{len, cs_pin} => {
             
+            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+
+            let mut buff = vec![0u8; len];
+            cp2130.spi_read(&mut buff).unwrap();
+
+            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
+
+            info!("Received: {}", hex::encode(buff));
+        },
+        Command::SpiWrite{data, cs_pin} => {
+            info!("Transmit: {}", hex::encode(&data));
+
+            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+
+            cp2130.spi_write(&data).unwrap();
+
+            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
+        },
+        Command::Test(opts) => {
+            run_tests(&mut cp2130, &opts);
         }
     }
 
-
-
 }
 
+
+fn run_tests(cp2130: &mut Cp2130, opts: &TestOpts) {
+    info!("Testing GPIO read/write");
+
+    cp2130.set_gpio_mode_level(opts.read_pin, GpioMode::Input, GpioLevel::Low).unwrap();
+
+    cp2130.set_gpio_mode_level(opts.write_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+    let v = cp2130.get_gpio_level(opts.read_pin).unwrap();
+    if v != false {
+        error!("GPIO read error");
+    }
+
+    cp2130.set_gpio_mode_level(opts.write_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
+    let v = cp2130.get_gpio_level(opts.read_pin).unwrap();
+    if v != true {
+        error!("GPIO read error");
+    }
+
+    info!("GPIO read/write okay");
+
+
+    info!("Testing SPI write (short)");
+
+    let mut rng = rand::thread_rng();
+    let data: Vec<u8> = (0..34).map(|_| rng.gen() ).collect();
+
+    cp2130.spi_write(&data).unwrap();
+
+    info!("SPI write (short) okay");
+
+
+    info!("Testing SPI write (long)");
+
+    let mut rng = rand::thread_rng();
+    let data: Vec<u8> = (0..300).map(|_| rng.gen() ).collect();
+
+    cp2130.spi_write(&data).unwrap();
+
+    info!("SPI write (long) okay");
+
+
+    info!("Testing SPI transfer (short)");
+
+    let mut rng = rand::thread_rng();
+    let data: Vec<u8> = (0..34).map(|_| rng.gen() ).collect();
+    let mut buff = vec![0u8; data.len()];
+
+    cp2130.spi_write_read(&data, &mut buff).unwrap();
+
+    if &data != &buff {
+        error!("SPI transfer (short) error ({:?} vs. {:?})", data, buff);
+    }
+
+    info!("SPI transfer (short) okay");
+
+
+    info!("Testing SPI transfer (long)");
+
+    let mut rng = rand::thread_rng();
+    let data: Vec<u8> = (0..300).map(|_| rng.gen() ).collect();
+    let mut buff = vec![0u8; data.len()];
+
+    cp2130.spi_write_read(&data, &mut buff).unwrap();
+
+    if &data != &buff {
+        error!("SPI transfer (long) error ({:?} vs. {:?})", data, buff);
+    }
+
+    info!("SPI transfer (long) okay");
+
+}
