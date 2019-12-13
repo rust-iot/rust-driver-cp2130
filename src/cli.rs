@@ -12,6 +12,8 @@ extern crate driver_cp2130;
 use driver_cp2130::manager::Manager;
 use driver_cp2130::device::{Cp2130, GpioMode, GpioLevel};
 
+extern crate hex;
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "cp2130-util")]
 /// CP2130 Utility
@@ -65,11 +67,24 @@ pub enum Command {
         #[structopt(long)]
         /// GPIO pin mode to set
         mode: Option<GpioMode>,
+    },
+    SpiTransfer {
+        #[structopt(parse(try_from_str=parse_hex_str))]
+        /// Data to transfer out
+        data: String,
+
+        #[structopt(long, default_value="6")]
+        /// SPI CS pin index
+        cs_pin: u8,
     }
 }
 
 fn parse_hex(src: &str) -> Result<u16, ParseIntError> {
     u16::from_str_radix(src, 16)
+}
+
+fn parse_hex_str(src: &str) -> Result<String, hex::FromHexError> {
+    hex::decode(src)
 }
 
 
@@ -131,6 +146,15 @@ fn main() {
             }
             let v = cp2130.get_gpio_level(pin).unwrap();
             info!("Pin: {} value: {}", pin, v);
+        },
+        Command::SpiTransfer{data, cs_pin} => {
+            cp2130.set_gpio_mode_level(pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+
+            let cmd = data.as_bytes();
+            let mut buff = vec![0u8; cmd.len()];
+            cp2130.spi_write_read(data.as_bytes(), &mut buff).unwrap();
+
+            
         }
     }
 
