@@ -3,9 +3,13 @@
 //! 
 //! Copyright 2019 Ryan Kurte
 
-use std::num::ParseIntError;
 
 use libusb::{Device as UsbDevice, DeviceList, DeviceDescriptor};
+
+#[cfg(feature = "structopt")]
+use std::num::ParseIntError;
+
+#[cfg(feature = "structopt")]
 use structopt::StructOpt;
 
 use crate::{Error};
@@ -17,17 +21,19 @@ pub struct Manager {
     context: libusb::Context,
 }
 
-#[derive(Debug, Clone, PartialEq, StructOpt)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "structopt", derive(StructOpt))]
 pub struct Filter {
-    #[structopt(long, default_value="10c4", parse(try_from_str=parse_hex))]
+    #[cfg_attr(feature = "structopt", structopt(long, default_value="10c4", parse(try_from_str=parse_hex)))]
     /// Device Vendor ID (VID) in hex
     pub vid: u16,
 
-    #[structopt(long, default_value="87a0", parse(try_from_str=parse_hex))]
+    #[cfg_attr(feature = "structopt", structopt(long, default_value="87a0", parse(try_from_str=parse_hex)))]
     /// Device Product ID (PID) in hex
     pub pid: u16,
 }
 
+#[cfg(feature = "structopt")]
 fn parse_hex(src: &str) -> Result<u16, ParseIntError> {
     u16::from_str_radix(src, 16)
 }
