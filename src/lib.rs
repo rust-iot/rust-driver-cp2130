@@ -13,11 +13,13 @@ extern crate bitflags;
 extern crate byteorder;
 
 extern crate embedded_hal;
+pub use embedded_hal::spi::{Mode as SpiMode};
+
 extern crate libusb;
 use libusb::{Device as UsbDevice, DeviceDescriptor};
 
 pub mod device;
-pub use crate::device::{Device, GpioMode, GpioLevel};
+pub use crate::device::{GpioMode, GpioLevel, SpiConfig, SpiClock};
 
 use crate::device::*;
 
@@ -43,7 +45,30 @@ impl From<libusb::Error> for Error {
 pub struct Cp2130<'a> {
     inner: Arc<Mutex<Inner<'a>>>,
     info: Info,
-    gpio_allocated: [bool; 11],
+}
+
+/// Device trait provides methods directly on the CP2130
+pub trait Device {
+    /// Read from the SPI device
+    fn spi_read(&self, buff: &mut [u8]) -> Result<usize, Error>;
+    
+    /// Write to the SPI device
+    fn spi_write(&self, buff: &[u8]) -> Result<(), Error>;
+
+    // Transfer (write-read) to and from the SPI device
+    fn spi_write_read(&self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error>;
+    
+    /// Fetch the CP2130 chip version
+    fn version(&self) -> Result<u16, Error> ;
+
+    /// Set the mode and level for a given GPIO pin
+    fn set_gpio_mode_level(&self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error>;
+    
+    /// Fetch the values for all GPIO pins
+    fn get_gpio_values(&self) -> Result<GpioLevels, Error>;
+    
+    /// Fetch the value for a given GPIO pin
+    fn get_gpio_level(&self, pin: u8) -> Result<bool, Error>;
 }
 
 impl <'a> Cp2130<'a> {
@@ -55,7 +80,7 @@ impl <'a> Cp2130<'a> {
         let inner = Arc::new(Mutex::new(inner));
 
         // Create wrapper object
-        Ok(Self{info, inner, gpio_allocated: [false; 11]})
+        Ok(Self{info, inner})
     }
 
     /// Fetch information for the connected device
@@ -64,32 +89,39 @@ impl <'a> Cp2130<'a> {
     }
 
     /// Create an SPI connector
-    pub fn spi(&'a mut self) -> Spi<'a> {
-        Spi{inner: self.inner.clone()}
+    pub fn spi(&self, channel: u8, config: SpiConfig) -> Result<Spi<'a>, Error> {
+        let mut inner = self.inner.lock().unwrap();
+
+        // Configure SPI
+        inner.spi_configure(channel, config)?;
+
+        Ok(Spi{inner: self.inner.clone()})
     }
 
     /// Create a GPIO OutputPin
-    pub fn gpio_out(&'a mut self, index: u8, mode: GpioMode, level: GpioLevel) -> Result<OutputPin<'a>, Error> {
-        if self.gpio_allocated[index as usize] {
+    pub fn gpio_out(&self, index: u8, mode: GpioMode, level: GpioLevel) -> Result<OutputPin<'a>, Error> {
+        let mut inner = self.inner.lock().unwrap();
+
+        if inner.gpio_allocated[index as usize] {
             return Err(Error::GpioInUse)
         }
 
-        self.set_gpio_mode_level(index, mode, level)?;
-
-        self.gpio_allocated[index as usize] = true;
+        inner.set_gpio_mode_level(index, mode, level)?;
+        inner.gpio_allocated[index as usize] = true;
 
         Ok(OutputPin{index, mode, inner: self.inner.clone()})
     }
 
     /// Create a GPIO InputPin
-    pub fn gpio_in(&'a mut self, index: u8) -> Result<InputPin<'a>, Error> {
-        if self.gpio_allocated[index as usize] {
+    pub fn gpio_in(&self, index: u8) -> Result<InputPin<'a>, Error> {
+        let mut inner = self.inner.lock().unwrap();
+
+        if inner.gpio_allocated[index as usize] {
             return Err(Error::GpioInUse)
         }
 
-        self.set_gpio_mode_level(index, GpioMode::Input, GpioLevel::Low)?;
-
-        self.gpio_allocated[index as usize] = true;
+        inner.set_gpio_mode_level(index, GpioMode::Input, GpioLevel::Low)?;
+        inner.gpio_allocated[index as usize] = true;
 
         Ok(InputPin{index, inner: self.inner.clone()})
     }
@@ -98,32 +130,39 @@ impl <'a> Cp2130<'a> {
 
 /// Underlying device functions
 impl <'a> Device for Cp2130<'a> {
-    fn spi_read(&mut self, buff: &mut [u8]) -> Result<usize, Error> {
-        self.inner.lock().unwrap().spi_read(buff)
+    fn spi_read(&self, buff: &mut [u8]) -> Result<usize, Error> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.spi_read(buff)
     }
 
-    fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error> {
-        self.inner.lock().unwrap().spi_write(buff)
+    fn spi_write(&self, buff: &[u8]) -> Result<(), Error> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.spi_write(buff)
     }
 
-    fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error> {
-        self.inner.lock().unwrap().spi_write_read(buff_out, buff_in)
+    fn spi_write_read(&self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.spi_write_read(buff_out, buff_in)
     }
 
-    fn version(&mut self) -> Result<u16, Error>  {
-        self.inner.lock().unwrap().version()
+    fn version(&self) -> Result<u16, Error>  {
+        let mut inner = self.inner.lock().unwrap();
+        inner.version()
     }
 
-    fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
-        self.inner.lock().unwrap().set_gpio_mode_level(pin, mode, level)
+    fn set_gpio_mode_level(&self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.set_gpio_mode_level(pin, mode, level)
     }
 
-    fn get_gpio_values(&mut self) -> Result<GpioLevels, Error> {
-        self.inner.lock().unwrap().get_gpio_values()
+    fn get_gpio_values(&self) -> Result<GpioLevels, Error> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.get_gpio_values()
     }
 
-    fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
-        self.inner.lock().unwrap().get_gpio_level(pin)
+    fn get_gpio_level(&self, pin: u8) -> Result<bool, Error> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.get_gpio_level(pin)
     }
 }
 

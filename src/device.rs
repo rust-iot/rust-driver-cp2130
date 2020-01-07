@@ -10,6 +10,8 @@ use byteorder::{LE, BE, ByteOrder};
 
 use libusb::{Device as UsbDevice, DeviceDescriptor, DeviceHandle, Direction, TransferType};
 
+use embedded_hal::spi::{Mode as SpiMode, Phase, Polarity, MODE_0};
+
 use crate::Error;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -143,31 +145,7 @@ pub(crate) struct Inner<'a> {
     _device: UsbDevice<'a>,
     handle: DeviceHandle<'a>,
     endpoints: Endpoints,
-}
-
-
-/// Device trait provides methods directly on the CP2130
-pub trait Device {
-    /// Read from the SPI device
-    fn spi_read(&mut self, buff: &mut [u8]) -> Result<usize, Error>;
-    
-    /// Write to the SPI device
-    fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error>;
-
-    // Transfer (write-read) to and from the SPI device
-    fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error>;
-    
-    /// Fetch the CP2130 chip version
-    fn version(&mut self) -> Result<u16, Error> ;
-
-    /// Set the mode and level for a given GPIO pin
-    fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error>;
-    
-    /// Fetch the values for all GPIO pins
-    fn get_gpio_values(&mut self) -> Result<GpioLevels, Error>;
-    
-    /// Fetch the value for a given GPIO pin
-    fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error>;
+    pub(crate) gpio_allocated: [bool; 11],
 }
 
 /// Device specific endpoints
@@ -295,13 +273,76 @@ impl <'a> Inner<'a> {
 
         let endpoints = Endpoints{control, write, read};
 
-        Ok((Inner{_device: device, handle, endpoints}, info))
+        Ok((Inner{_device: device, handle, endpoints, gpio_allocated: [false; 11]}, info))
     }
 }
-    
-impl <'a> Device for Inner<'a> {
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum SpiClock {
+    Clock12Mhz,
+    Clock6MHz,
+    Clock3MHz,
+    Clock1_5MHz,
+    Clock750KHz,
+    Clock375MHz,
+}
+
+pub const CPOL_TRAILING: u8 = (0 << 5);
+
+#[derive(PartialEq, Clone)]
+pub struct SpiConfig {
+    pub clock: SpiClock, 
+    pub spi_mode: SpiMode, 
+    pub cs_mode: GpioMode
+}
+
+impl Default for SpiConfig {
+    fn default() -> Self {
+        Self {
+            clock: SpiClock::Clock1_5MHz,
+            spi_mode: MODE_0,
+            cs_mode: GpioMode::PushPull,
+        }
+    }
+}
+
+impl <'a> Inner<'a> {
+    pub(crate) fn spi_configure(&mut self, channel: u8, config: SpiConfig) -> Result<(), Error> {
+
+        let mut flags = 0;
+
+        if let Phase::CaptureOnSecondTransition = config.spi_mode.phase {
+            flags |= 1 << 5;
+        }
+
+        if let Polarity::IdleHigh = config.spi_mode.polarity {
+            flags |= 1 << 4;
+        };
+
+        if let GpioMode::PushPull = config.cs_mode {
+            flags |= 1 << 3
+        }
+
+        flags |= (config.clock as u8) & 0b0111;
+
+        let cmd = [
+            channel,
+            flags
+        ];
+
+        self.handle.write_control(
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            Commands::SetSpiWord as u8,
+            0, 0,
+            &cmd,
+            Duration::from_millis(200)
+        )?;
+
+        Ok(())
+    }
+
     /// Read from the SPI device
-    fn spi_read(&mut self, buff: &mut [u8]) -> Result<usize, Error> {
+    pub(crate) fn spi_read(&mut self, buff: &mut [u8]) -> Result<usize, Error> {
         let mut cmd = [0u8; 8];
         cmd[2] = TransferCommand::Read as u8;
         LE::write_u32(&mut cmd[4..], buff.len() as u32);
@@ -342,7 +383,7 @@ impl <'a> Device for Inner<'a> {
     }
 
     /// Write to the SPI device
-    fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error> {
+    pub(crate) fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error> {
 
         let mut cmd = vec![0u8; buff.len() + 8];
 
@@ -365,7 +406,7 @@ impl <'a> Device for Inner<'a> {
     }
 
     // Transfer (write-read) to and from the SPI device
-    fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error> {
+    pub(crate) fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error> {
 
         let mut cmd = vec![0u8; buff_out.len() + 8];
 
@@ -410,7 +451,7 @@ impl <'a> Device for Inner<'a> {
     }
 
     /// Fetch the CP2130 chip version
-    fn version(&mut self) -> Result<u16, Error> {
+    pub(crate) fn version(&mut self) -> Result<u16, Error> {
         let mut buff = [0u8; 2];
 
         self.handle.read_control(
@@ -427,7 +468,7 @@ impl <'a> Device for Inner<'a> {
     }
 
     /// Set the mode and level for a given GPIO pin
-    fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
+    pub(crate) fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
         assert!(pin <= 10);
         
         let cmd = [
@@ -448,7 +489,7 @@ impl <'a> Device for Inner<'a> {
     }
 
     /// Fetch the values for all GPIO pins
-    fn get_gpio_values(&mut self) -> Result<GpioLevels, Error> {
+    pub(crate) fn get_gpio_values(&mut self) -> Result<GpioLevels, Error> {
         let mut buff = [0u8; 2];
 
         self.handle.read_control(
@@ -466,7 +507,7 @@ impl <'a> Device for Inner<'a> {
     }
 
     /// Fetch the value for a given GPIO pin
-    fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
+    pub (crate) fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
         assert!(pin <= 10);
 
         let levels = self.get_gpio_values()?;
