@@ -95,7 +95,7 @@ impl <'a> Cp2130<'a> {
         // Configure SPI
         inner.spi_configure(channel, config)?;
 
-        Ok(Spi{inner: self.inner.clone()})
+        Ok(Spi{inner: self.inner.clone(), channel})
     }
 
     /// Create a GPIO OutputPin
@@ -168,6 +168,7 @@ impl <'a> Device for Cp2130<'a> {
 
 /// Spi object implements embedded-hal SPI traits for the CP2130
 pub struct Spi<'a> {
+    channel: u8,
     inner: Arc<Mutex<Inner<'a>>>,
 }
 

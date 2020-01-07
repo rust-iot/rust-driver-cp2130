@@ -277,6 +277,7 @@ impl <'a> Inner<'a> {
     }
 }
 
+/// SPI clock configuration
 #[derive(Debug, PartialEq, Clone)]
 pub enum SpiClock {
     Clock12Mhz,
@@ -287,13 +288,26 @@ pub enum SpiClock {
     Clock375MHz,
 }
 
+/// Chip select mode
+#[derive(Debug, PartialEq, Clone)]
+pub enum CsMode {
+    /// Auto chip select is disabled for the specified channel
+    Disabled = 0x00,
+    /// Auto chip select is enabled for the specified channel
+    Enabled = 0x01,
+    /// Auto chip select is enabled for the specified channel,
+    /// all other chip selects are disabled
+    Exclusive = 0x02,
+}
+
 pub const CPOL_TRAILING: u8 = (0 << 5);
 
 #[derive(PartialEq, Clone)]
 pub struct SpiConfig {
     pub clock: SpiClock, 
     pub spi_mode: SpiMode, 
-    pub cs_mode: GpioMode
+    pub cs_mode: CsMode,
+    pub cs_pin_mode: GpioMode
 }
 
 impl Default for SpiConfig {
@@ -301,33 +315,63 @@ impl Default for SpiConfig {
         Self {
             clock: SpiClock::Clock1_5MHz,
             spi_mode: MODE_0,
-            cs_mode: GpioMode::PushPull,
+            cs_mode: CsMode::Disabled,
+            cs_pin_mode: GpioMode::PushPull,
         }
     }
 }
 
 impl <'a> Inner<'a> {
+
     pub(crate) fn spi_configure(&mut self, channel: u8, config: SpiConfig) -> Result<(), Error> {
+        // Set SPI channel configuration
+        self.set_spi_word(channel, config.clock, config.spi_mode, config.cs_pin_mode)?;
+
+        // Configure chip select
+        self.set_gpio_chip_select(channel, config.cs_mode)?;
+
+        Ok(())
+    }
+
+    pub(crate) fn set_spi_word(&mut self, channel: u8, clock: SpiClock, spi_mode: SpiMode, cs_pin_mode: GpioMode) -> Result<(), Error> {
 
         let mut flags = 0;
 
-        if let Phase::CaptureOnSecondTransition = config.spi_mode.phase {
+        if let Phase::CaptureOnSecondTransition = spi_mode.phase {
             flags |= 1 << 5;
         }
 
-        if let Polarity::IdleHigh = config.spi_mode.polarity {
+        if let Polarity::IdleHigh = spi_mode.polarity {
             flags |= 1 << 4;
         };
 
-        if let GpioMode::PushPull = config.cs_mode {
+        if let GpioMode::PushPull = cs_pin_mode{
             flags |= 1 << 3
         }
 
-        flags |= (config.clock as u8) & 0b0111;
+        flags |= (clock as u8) & 0b0111;
 
         let cmd = [
             channel,
             flags
+        ];
+
+        self.handle.write_control(
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            Commands::SetSpiWord as u8,
+            0, 0,
+            &cmd,
+            Duration::from_millis(200)
+        )?;
+
+        Ok(())
+    }
+
+    pub(crate) fn set_gpio_chip_select(&mut self, channel: u8, cs_mode: CsMode) -> Result<(), Error> {
+
+        let cmd = [
+            channel,
+            cs_mode as u8,
         ];
 
         self.handle.write_control(
