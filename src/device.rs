@@ -521,6 +521,8 @@ impl <'a> Inner<'a> {
             level as u8,
         ];
 
+        trace!("GPIO set pin: {} mode: {:?} level: {:?} (cmd: {:?})", pin, mode, level, cmd);
+
         self.handle.write_control(
             (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
             Commands::SetGpioModeAndLevel as u8,
@@ -545,9 +547,11 @@ impl <'a> Inner<'a> {
         )?;
 
         // Inexplicably big endian here
-        let values = BE::read_u16(&buff);
+        let values = GpioLevels::from_bits_truncate(BE::read_u16(&buff));
 
-        Ok(GpioLevels::from_bits_truncate(values))
+        trace!("GPIO get pins (values: {:?})", values);
+
+        Ok(values)
     }
 
     /// Fetch the value for a given GPIO pin
