@@ -377,11 +377,13 @@ impl <'a> Inner<'a> {
             flags |= 1 << 4;
         };
 
-        if let GpioMode::PushPull = cs_pin_mode{
+        if let GpioMode::PushPull = cs_pin_mode {
             flags |= 1 << 3
         }
 
         flags |= (clock as u8) & 0b0111;
+
+        debug!("Set SPI word: 0x{:02x?}", flags);
 
         let cmd = [
             channel,
@@ -393,6 +395,19 @@ impl <'a> Inner<'a> {
             Commands::SetSpiWord as u8,
             0, 0,
             &cmd,
+            Duration::from_millis(200)
+        )?;
+
+        Ok(())
+    }
+
+    pub(crate) fn reset(&mut self) -> Result<(), Error> {
+
+        self.handle.write_control(
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            Commands::ResetDevice as u8,
+            0, 0,
+            &[],
             Duration::from_millis(200)
         )?;
 

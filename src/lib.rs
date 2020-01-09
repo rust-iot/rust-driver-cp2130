@@ -88,6 +88,10 @@ impl <'a> Cp2130<'a> {
         self.info.clone()
     }
 
+    pub fn reset(&self) -> Result<(), Error> {
+        self.inner.lock().unwrap().reset()
+    }
+
     /// Create an SPI connector
     pub fn spi(&self, channel: u8, config: SpiConfig) -> Result<Spi<'a>, Error> {
         let mut inner = self.inner.lock().unwrap();
