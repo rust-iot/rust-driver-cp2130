@@ -12,7 +12,10 @@ use simplelog::{TermLogger, LevelFilter, TerminalMode};
 
 extern crate driver_cp2130;
 use driver_cp2130::manager::{Manager, Filter};
-use driver_cp2130::{Cp2130, Device, GpioMode, GpioLevel};
+use driver_cp2130::{Cp2130, SpiConfig, Device, GpioMode, GpioLevel};
+
+extern crate embedded_hal;
+use embedded_hal::blocking::spi::*;
 
 extern crate hex;
 extern crate rand;
@@ -73,9 +76,8 @@ pub enum Command {
         /// Data to write (in hex)
         data: Data,
 
-        #[structopt(long, default_value="6")]
-        /// SPI CS pin index
-        cs_pin: u8,
+        #[structopt(flatten)]
+        spi_opts: SpiOpts,
     },
     /// Write to an attached SPI device
     SpiWrite {
@@ -83,22 +85,22 @@ pub enum Command {
         /// Data to write (in hex)
         data: Data,
 
-        #[structopt(long, default_value="6")]
-        /// SPI CS pin index
-        cs_pin: u8,
-    },
-    /// Read from an attached SPI device
-    SpiRead {
-        #[structopt()]
-        /// Length of data to read
-        len: usize,
-
-        #[structopt(long, default_value="6")]
-        /// SPI CS pin index
-        cs_pin: u8,
+        #[structopt(flatten)]
+        spi_opts: SpiOpts,
     },
     /// Test interaction with the CP2130 device
     Test(TestOpts)
+}
+
+#[derive(Clone, Debug, PartialEq, StructOpt)]
+pub struct SpiOpts {
+    #[structopt(long, default_value="0")]
+    /// SPI Channel
+    channel: u8,
+
+    #[structopt(long, default_value="0")]
+    /// SPI CS gpio index
+    cs_pin: u8,
 }
 
 #[derive(Debug, StructOpt)]
@@ -159,37 +161,31 @@ fn main() {
             let v = cp2130.get_gpio_level(pin).unwrap();
             info!("Pin: {} value: {}", pin, v);
         },
-        Command::SpiTransfer{data, cs_pin} => {
+        Command::SpiTransfer{data, spi_opts} => {
             info!("Transmit: {}", hex::encode(&data));
 
-            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+            let mut spi = cp2130.spi(spi_opts.channel, SpiConfig::default()).unwrap();
 
-            let mut buff = vec![0u8; data.len()];
-            cp2130.spi_write_read(&data, &mut buff).unwrap();
+            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
 
-            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
-
-            info!("Received: {}", hex::encode(buff));
-        },
-        Command::SpiRead{len, cs_pin} => {
+            let mut buff = data.clone();
             
-            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+            spi.transfer(&mut buff).unwrap();
 
-            let mut buff = vec![0u8; len];
-            cp2130.spi_read(&mut buff).unwrap();
-
-            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
+            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
 
             info!("Received: {}", hex::encode(buff));
         },
-        Command::SpiWrite{data, cs_pin} => {
+        Command::SpiWrite{data, spi_opts} => {
             info!("Transmit: {}", hex::encode(&data));
 
-            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+            let mut spi = cp2130.spi(spi_opts.channel, SpiConfig::default()).unwrap();
 
-            cp2130.spi_write(&data).unwrap();
+            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
 
-            cp2130.set_gpio_mode_level(cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
+            spi.write(&data).unwrap();
+
+            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
         },
         Command::Test(opts) => {
             run_tests(&mut cp2130, &opts);

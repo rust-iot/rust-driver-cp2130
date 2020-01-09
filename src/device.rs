@@ -302,33 +302,65 @@ pub enum CsMode {
 
 pub const CPOL_TRAILING: u8 = (0 << 5);
 
+bitflags!(
+    /// Mask for delay configuration
+    pub struct DelayMask: u8 {
+        const CS_TOGGLE      = 1 << 3;
+        const PRE_DEASSERT   = 1 << 2;
+        const POST_ASSERT    = 1 << 1;
+        const INTER_BYE      = 1 << 0;
+    }
+);
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct SpiDelays {
+    mask: DelayMask,
+    pre_deassert: u8,
+    post_assert: u8,
+    inter_byte: u8,
+}
+
 #[derive(PartialEq, Clone)]
 pub struct SpiConfig {
     pub clock: SpiClock, 
     pub spi_mode: SpiMode, 
     pub cs_mode: CsMode,
-    pub cs_pin_mode: GpioMode
+    pub cs_pin_mode: GpioMode,
+    pub delays: SpiDelays,
 }
 
 impl Default for SpiConfig {
     fn default() -> Self {
         Self {
-            clock: SpiClock::Clock1_5MHz,
+            clock: SpiClock::Clock3MHz,
             spi_mode: MODE_0,
             cs_mode: CsMode::Disabled,
             cs_pin_mode: GpioMode::PushPull,
+            delays: SpiDelays {
+                mask: DelayMask::empty(),
+                pre_deassert: 0,
+                post_assert: 0,
+                inter_byte: 0,
+            }
         }
     }
 }
 
+
+
 impl <'a> Inner<'a> {
 
     pub(crate) fn spi_configure(&mut self, channel: u8, config: SpiConfig) -> Result<(), Error> {
+        debug!("Setting SPI channel: {:?} clock: {:?} cs mode: {:?}", channel, config.clock, config.cs_mode);
+
         // Set SPI channel configuration
         self.set_spi_word(channel, config.clock, config.spi_mode, config.cs_pin_mode)?;
 
         // Configure chip select
         self.set_gpio_chip_select(channel, config.cs_mode)?;
+
+        // Configure delays
+        self.set_spi_delay(channel, config.delays)?;
 
         Ok(())
     }
@@ -367,6 +399,27 @@ impl <'a> Inner<'a> {
         Ok(())
     }
 
+    pub(crate) fn set_spi_delay(&mut self, channel: u8, delays: SpiDelays) -> Result<(), Error> {
+
+        let cmd = [
+            channel,
+            delays.mask.bits(),
+            delays.inter_byte,
+            delays.post_assert,
+            delays.pre_deassert,
+        ];
+
+        self.handle.write_control(
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            Commands::SetSpiDelay as u8,
+            0, 0,
+            &cmd,
+            Duration::from_millis(200)
+        )?;
+
+        Ok(())
+    }
+
     pub(crate) fn set_gpio_chip_select(&mut self, channel: u8, cs_mode: CsMode) -> Result<(), Error> {
 
         let cmd = [
@@ -376,7 +429,7 @@ impl <'a> Inner<'a> {
 
         self.handle.write_control(
             (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
-            Commands::SetSpiWord as u8,
+            Commands::SetGpioChipSelect as u8,
             0, 0,
             &cmd,
             Duration::from_millis(200)
