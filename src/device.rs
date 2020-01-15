@@ -145,7 +145,9 @@ pub(crate) struct Inner<'a> {
     _device: UsbDevice<'a>,
     handle: DeviceHandle<'a>,
     endpoints: Endpoints,
+
     pub(crate) gpio_allocated: [bool; 11],
+    spi_clock: SpiClock,
 }
 
 /// Device specific endpoints
@@ -273,12 +275,12 @@ impl <'a> Inner<'a> {
 
         let endpoints = Endpoints{control, write, read};
 
-        Ok((Inner{_device: device, handle, endpoints, gpio_allocated: [false; 11]}, info))
+        Ok((Inner{_device: device, handle, endpoints, gpio_allocated: [false; 11], spi_clock: SpiClock::Clock12Mhz}, info))
     }
 }
 
 /// SPI clock configuration
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum SpiClock {
     Clock12Mhz,
     Clock6MHz,
@@ -286,6 +288,24 @@ pub enum SpiClock {
     Clock1_5MHz,
     Clock750KHz,
     Clock375MHz,
+}
+
+impl SpiClock {
+    pub fn freq(&self) -> u64 {
+        match self {
+            SpiClock::Clock12Mhz  => 12_000_000,
+            SpiClock::Clock6MHz   => 6_000_000,
+            SpiClock::Clock3MHz   => 3_000_000,
+            SpiClock::Clock1_5MHz => 1_500_000,
+            SpiClock::Clock750KHz => 750_000,
+            SpiClock::Clock375MHz => 375_000,
+        }
+    }
+
+    pub fn transfer_time(&self, len_bytes: u64) -> std::time::Duration {
+        let micros = len_bytes * 8 * 1_000_000 / self.freq();
+        Duration::from_micros(micros)
+    }
 }
 
 /// Chip select mode
@@ -398,6 +418,8 @@ impl <'a> Inner<'a> {
             Duration::from_millis(200)
         )?;
 
+        self.spi_clock = clock;
+
         Ok(())
     }
 
@@ -503,7 +525,8 @@ impl <'a> Inner<'a> {
         LE::write_u32(&mut cmd[4..], buff.len() as u32);
         (&mut cmd[8..]).copy_from_slice(buff);
 
-        trace!("SPI write (cmd: {:?})", cmd);
+        let t = self.spi_clock.transfer_time(buff.len() as u64);
+        debug!("SPI write (cmd: {:?} time: {} us)", cmd, t.as_micros());
 
         self.handle.write_bulk(
             self.endpoints.write.address,
@@ -511,6 +534,8 @@ impl <'a> Inner<'a> {
             Duration::from_millis(200),
         )?;
 
+        // Wait for operation to complete so we don't confuse the device
+        std::thread::sleep(t);
 
         trace!("SPI write done");
 
@@ -522,11 +547,14 @@ impl <'a> Inner<'a> {
 
         let mut cmd = vec![0u8; buff_out.len() + 8];
 
+        // TODO: split this into while loop so long packet writes work correctly
+        // At the moment the read buffer will probably be overwritten
         cmd[2] = TransferCommand::WriteRead as u8;
         LE::write_u32(&mut cmd[4..], buff_out.len() as u32);
         (&mut cmd[8..]).copy_from_slice(buff_out);
 
-        trace!("SPI transfer (cmd: {:?})", cmd);
+        let total_time = self.spi_clock.transfer_time(buff_out.len() as u64);
+        debug!("SPI transfer (cmd: {:?} time: {} us)", cmd, total_time.as_micros());
 
         self.handle.write_bulk(
             self.endpoints.write.address,
@@ -536,7 +564,6 @@ impl <'a> Inner<'a> {
 
         trace!("SPI transfer await resp");
 
-        // TODO: loop for > 64-byte packets
         let mut index = 0;
 
         while index < buff_in.len() {
@@ -546,7 +573,10 @@ impl <'a> Inner<'a> {
                 buff_in.len() - index
             };
 
-            trace!("SPI read (len: {}, index: {}, rem: {})", buff_in.len(), index, remainder);
+            let t = self.spi_clock.transfer_time(buff_out.len() as u64);
+            
+            trace!("SPI read (len: {}, index: {}, rem: {}, time: {} us)", 
+                    buff_in.len(), index, remainder, t.as_micros());
 
             let n = self.handle.read_bulk(
                 self.endpoints.read.address,
@@ -555,6 +585,9 @@ impl <'a> Inner<'a> {
             )?;
 
             index += n;
+
+            // Wait for operation to complete before we continue
+            std::thread::sleep(t);
         }
 
         trace!("SPI transfer done");
