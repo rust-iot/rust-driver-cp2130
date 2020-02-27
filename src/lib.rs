@@ -12,6 +12,9 @@ extern crate log;
 extern crate bitflags;
 extern crate byteorder;
 
+#[macro_use]
+extern crate lazy_static;
+
 extern crate embedded_hal;
 pub use embedded_hal::spi::{Mode as SpiMode};
 
@@ -25,6 +28,8 @@ use crate::device::*;
 
 pub mod manager;
 
+pub mod prelude;
+
 #[derive(Debug)]
 pub enum Error {
 //    Io(IoError),
@@ -33,6 +38,8 @@ pub enum Error {
     Configurations,
     Endpoint,
     GpioInUse,
+    InvalidIndex,
+    InvalidBaud,
 }
 
 impl From<libusb::Error> for Error {
@@ -99,7 +106,7 @@ impl <'a> Cp2130<'a> {
         // Configure SPI
         inner.spi_configure(channel, config)?;
 
-        Ok(Spi{inner: self.inner.clone(), channel})
+        Ok(Spi{inner: self.inner.clone(), _channel: channel})
     }
 
     /// Create a GPIO OutputPin
@@ -172,7 +179,8 @@ impl <'a> Device for Cp2130<'a> {
 
 /// Spi object implements embedded-hal SPI traits for the CP2130
 pub struct Spi<'a> {
-    channel: u8,
+    // TODO: use channel configuration
+    _channel: u8,
     inner: Arc<Mutex<Inner<'a>>>,
 }
 

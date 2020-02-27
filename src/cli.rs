@@ -127,21 +127,10 @@ fn main() {
     // Setup logging
     TermLogger::init(opts.level, simplelog::Config::default(), TerminalMode::Mixed).unwrap();
 
-    // Create new CP2130 manager
-    let mut m = Manager::new().unwrap();
-
     // Find matching devices
-    let mut matches = m.devices_filtered(opts.filter).unwrap();
+    let (device, descriptor) = Manager::device(opts.filter, opts.index).unwrap();
 
-    if matches.len() < opts.index {
-        error!("Device index ({}) exceeds number of discovered devices ({})",
-            opts.index, matches.len());
-        return
-    }
-
-    debug!("Connecting to device (index: {})", opts.index);
-    
-    let (device, descriptor) = matches.remove(opts.index);
+    // Create CP2130 connection
     let mut cp2130 = Cp2130::new(device, descriptor).unwrap();
 
     debug!("Device connected");

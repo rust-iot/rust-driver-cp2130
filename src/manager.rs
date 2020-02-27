@@ -3,8 +3,7 @@
 //! 
 //! Copyright 2019 Ryan Kurte
 
-
-use libusb::{Device as UsbDevice, DeviceList, DeviceDescriptor};
+pub use libusb::{Device as UsbDevice, DeviceList, DeviceDescriptor};
 
 #[cfg(feature = "structopt")]
 use std::num::ParseIntError;
@@ -15,10 +14,17 @@ use structopt::StructOpt;
 use crate::{Error};
 use crate::device::{VID, PID};
 
+lazy_static!{
+    // LibUSB context created automagically
+    static ref CONTEXT: libusb::Context = {
+        libusb::Context::new().unwrap()
+    };
+}
+
 /// Manager object maintains libusb context and provides
 /// methods for connecting to matching devices
 pub struct Manager {
-    context: libusb::Context,
+    //context: libusb::Context,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,25 +51,10 @@ impl Default for Filter {
 }
 
 impl Manager {
-    /// Initialise the CP2130 manager (and underlying libusb context)
-    /// This must be kept in scope until all CP2130 instances are disposed of
-    pub fn new() -> Result<Manager, Error> {
-        // Attempt to initialise context
-        let context = match libusb::Context::new() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Initialising libusb context: {}", e);
-                return Err(Error::Usb(e))
-            }
-        };
-
-        Ok(Manager{context})
-    }
-
     /// Fetch a libusb device list (for filtering and connecting to devices)
-    pub fn devices<'b>(&'b mut self) -> Result<DeviceList<'b>, Error> {
+    pub fn devices() -> Result<DeviceList<'static>, Error> {
         // Attempt to fetch device list
-        let devices = match self.context.devices() {
+        let devices = match CONTEXT.devices() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fetching devices: {}", e);
@@ -74,8 +65,8 @@ impl Manager {
         Ok(devices)
     }
 
-    pub fn devices_filtered<'b>(&'b mut self, filter: Filter) -> Result<Vec<(UsbDevice, DeviceDescriptor)>, Error> {
-        let devices = self.devices()?;
+    pub fn devices_filtered(filter: Filter) -> Result<Vec<(UsbDevice<'static>, DeviceDescriptor)>, Error> {
+        let devices = Self::devices()?;
 
         let mut matches = vec![];
 
@@ -99,4 +90,18 @@ impl Manager {
         Ok(matches)
     }
 
+    pub fn device(filter: Filter, index: usize) -> Result<(UsbDevice<'static>, DeviceDescriptor), Error> {
+        // Find matching devices
+        let mut matches = Self::devices_filtered(filter)?;
+
+        // Check index is valid
+        if matches.len() < index {
+            error!("Device index ({}) exceeds number of discovered devices ({})",
+                index, matches.len());
+            return Err(Error::InvalidIndex)
+        }
+
+        // Return match
+        Ok(matches.remove(index))
+    }
 }

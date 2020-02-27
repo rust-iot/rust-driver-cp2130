@@ -308,6 +308,22 @@ impl SpiClock {
     }
 }
 
+impl std::convert::TryFrom<usize> for SpiClock {
+    type Error = Error;
+
+   fn try_from(v: usize) -> Result<Self, Self::Error> {
+        match v {
+            12_000_000 => Ok(SpiClock::Clock12Mhz),
+            6_000_000 => Ok(SpiClock::Clock6MHz),
+            3_000_000 => Ok(SpiClock::Clock3MHz),
+            1_500_000 => Ok(SpiClock::Clock1_5MHz),
+            750_000 => Ok(SpiClock::Clock750KHz),
+            375_000 => Ok(SpiClock::Clock375MHz),
+            _ => Err(Error::InvalidBaud),
+        }
+    }
+}
+
 /// Chip select mode
 #[derive(Debug, PartialEq, Clone)]
 pub enum CsMode {
@@ -320,7 +336,7 @@ pub enum CsMode {
     Exclusive = 0x02,
 }
 
-pub const CPOL_TRAILING: u8 = (0 << 5);
+pub const CPOL_TRAILING: u8 = 0 << 5;
 
 bitflags!(
     /// Mask for delay configuration
