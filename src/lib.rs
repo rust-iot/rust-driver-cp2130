@@ -184,7 +184,7 @@ pub struct Spi<'a> {
     inner: Arc<Mutex<Inner<'a>>>,
 }
 
-use embedded_hal::blocking::spi::{Write, Transfer};
+use embedded_hal::blocking::spi::{Write, Transfer, Transactional, Operation};
 
 impl <'a> Transfer<u8> for Spi<'a> {
     type Error = Error;
@@ -204,6 +204,23 @@ impl <'a> Write<u8> for Spi<'a> {
         Ok(())
     }
 }
+
+impl <'a> Transactional<u8> for Spi<'a> {
+    type Error = Error;
+
+    fn exec<'b>(&mut self, operations: &mut [Operation<'b, u8>]) -> Result<(), Self::Error> {
+
+        for o in operations.iter_mut() {
+            match o {
+                Operation::Write(d) => self.write(d)?,
+                Operation::WriteRead(d) => self.transfer(d).map(|_| ())?,
+            }
+        }
+
+        Ok(())
+    }
+}
+
 
 /// InputPin object implements embedded-hal InputPin traits for the CP2130
 pub struct InputPin<'a> {

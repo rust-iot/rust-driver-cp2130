@@ -47,3 +47,7 @@ optional = true
 name = "cp2130-util"
 path = "src/cli.rs"
 required-features = [ "util" ]
+
+
+[patch.crates-io]
+embedded-hal = { git = "https://github.com/ryankurte/embedded-hal", branch = "feature/spi-i2c-transactions" }
