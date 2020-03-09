@@ -255,6 +255,10 @@ impl <'a> Inner<'a> {
             // TODO: track this and re-enable on closing?
         }
 
+        // Claim inerface
+        handle.claim_interface(control.iface)?;
+
+        // Map endpoints
         let write = match write {
             Some(c) => c,
             None => {
@@ -272,9 +276,9 @@ impl <'a> Inner<'a> {
             }
         };
         handle.set_active_configuration(read.config)?;
-
+        
+        // Build endpoints
         let endpoints = Endpoints{control, write, read};
-
         Ok((Inner{_device: device, handle, endpoints, gpio_allocated: [false; 11], spi_clock: SpiClock::Clock12Mhz}, info))
     }
 }
