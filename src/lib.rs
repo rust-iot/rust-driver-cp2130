@@ -213,7 +213,7 @@ impl <'a> Transactional<u8> for Spi<'a> {
         for o in operations.iter_mut() {
             match o {
                 Operation::Write(d) => self.write(d)?,
-                Operation::WriteRead(d) => self.transfer(d).map(|_| ())?,
+                Operation::Transfer(d) => self.transfer(d).map(|_| ())?,
             }
         }
 
