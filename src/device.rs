@@ -255,7 +255,9 @@ impl <'a> Inner<'a> {
             // TODO: track this and re-enable on closing?
         }
 
-        // Claim inerface
+        // Claim interface
+        // Note linux doesn't like this...
+        #[cfg(not(target_os = "linux"))]
         handle.claim_interface(control.iface)?;
 
         // Map endpoints
