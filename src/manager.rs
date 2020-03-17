@@ -95,7 +95,7 @@ impl Manager {
         let mut matches = Self::devices_filtered(filter)?;
 
         // Check index is valid
-        if matches.len() < index {
+        if matches.len() < index || matches.len() == 0 {
             error!("Device index ({}) exceeds number of discovered devices ({})",
                 index, matches.len());
             return Err(Error::InvalidIndex)
