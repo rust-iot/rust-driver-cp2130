@@ -51,4 +51,4 @@ required-features = [ "util" ]
 
 [patch.crates-io]
 embedded-hal = { git = "https://github.com/ryankurte/embedded-hal", branch = "feature/spi-transactions" }
-libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/" }
+#libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/" }

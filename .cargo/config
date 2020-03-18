@@ -1,0 +1,10 @@
+
+[target.armv7-unknown-linux-gnueabihf]
+linker = "arm-linux-gnueabihf-gcc"
+
+
+[target.i686-pc-windows-gnu]
+linker = "i686-w64-mingw32-gcc-posix"
+ar = "i686-w64-mingw32-gcc-ar-posix"
+rustflags = "-C panic=abort"
+
