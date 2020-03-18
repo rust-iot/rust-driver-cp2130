@@ -18,8 +18,8 @@ extern crate lazy_static;
 extern crate embedded_hal;
 pub use embedded_hal::spi::{Mode as SpiMode};
 
-extern crate libusb;
-use libusb::{Device as UsbDevice, DeviceDescriptor};
+extern crate rusb;
+use rusb::{Device as UsbDevice, Context, DeviceDescriptor};
 
 pub mod device;
 pub use crate::device::{GpioMode, GpioLevel, SpiConfig, SpiClock};
@@ -33,7 +33,7 @@ pub mod prelude;
 #[derive(Debug)]
 pub enum Error {
 //    Io(IoError),
-    Usb(libusb::Error),
+    Usb(rusb::Error),
     NoLanguages,
     Configurations,
     Endpoint,
@@ -42,15 +42,15 @@ pub enum Error {
     InvalidBaud,
 }
 
-impl From<libusb::Error> for Error {
-    fn from(e: libusb::Error) -> Self {
+impl From<rusb::Error> for Error {
+    fn from(e: rusb::Error) -> Self {
         Error::Usb(e)
     }
 }
 
 /// CP2130 provides methods to interact with the device, as well as create new spi and gpio connectors.
-pub struct Cp2130<'a> {
-    inner: Arc<Mutex<Inner<'a>>>,
+pub struct Cp2130 {
+    inner: Arc<Mutex<Inner>>,
     info: Info,
 }
 
@@ -78,9 +78,9 @@ pub trait Device {
     fn get_gpio_level(&self, pin: u8) -> Result<bool, Error>;
 }
 
-impl <'a> Cp2130<'a> {
+impl Cp2130{
     /// Create a new CP2130 instance from a libusb device and descriptor
-    pub fn new(device: UsbDevice<'a>, descriptor: DeviceDescriptor) -> Result<Self, Error> {
+    pub fn new(device: UsbDevice<Context>, descriptor: DeviceDescriptor) -> Result<Self, Error> {
         
         // Connect to device
         let (inner, info) = Inner::new(device, descriptor)?;
@@ -100,7 +100,7 @@ impl <'a> Cp2130<'a> {
     }
 
     /// Create an SPI connector
-    pub fn spi(&self, channel: u8, config: SpiConfig) -> Result<Spi<'a>, Error> {
+    pub fn spi(&self, channel: u8, config: SpiConfig) -> Result<Spi, Error> {
         let mut inner = self.inner.lock().unwrap();
 
         // Configure SPI
@@ -110,7 +110,7 @@ impl <'a> Cp2130<'a> {
     }
 
     /// Create a GPIO OutputPin
-    pub fn gpio_out(&self, index: u8, mode: GpioMode, level: GpioLevel) -> Result<OutputPin<'a>, Error> {
+    pub fn gpio_out(&self, index: u8, mode: GpioMode, level: GpioLevel) -> Result<OutputPin, Error> {
         let mut inner = self.inner.lock().unwrap();
 
         if inner.gpio_allocated[index as usize] {
@@ -124,7 +124,7 @@ impl <'a> Cp2130<'a> {
     }
 
     /// Create a GPIO InputPin
-    pub fn gpio_in(&self, index: u8) -> Result<InputPin<'a>, Error> {
+    pub fn gpio_in(&self, index: u8) -> Result<InputPin, Error> {
         let mut inner = self.inner.lock().unwrap();
 
         if inner.gpio_allocated[index as usize] {
@@ -140,7 +140,7 @@ impl <'a> Cp2130<'a> {
 }
 
 /// Underlying device functions
-impl <'a> Device for Cp2130<'a> {
+impl Device for Cp2130{
     fn spi_read(&self, buff: &mut [u8]) -> Result<usize, Error> {
         let mut inner = self.inner.lock().unwrap();
         inner.spi_read(buff)
@@ -178,15 +178,15 @@ impl <'a> Device for Cp2130<'a> {
 }
 
 /// Spi object implements embedded-hal SPI traits for the CP2130
-pub struct Spi<'a> {
+pub struct Spi{
     // TODO: use channel configuration
     _channel: u8,
-    inner: Arc<Mutex<Inner<'a>>>,
+    inner: Arc<Mutex<Inner>>,
 }
 
 use embedded_hal::blocking::spi::{Write, Transfer, Transactional, Operation};
 
-impl <'a> Transfer<u8> for Spi<'a> {
+impl Transfer<u8> for Spi {
     type Error = Error;
 
     fn transfer<'w>(&mut self, words: &'w mut [u8] ) -> Result<&'w [u8], Self::Error> {
@@ -196,7 +196,7 @@ impl <'a> Transfer<u8> for Spi<'a> {
     }
 }
 
-impl <'a> Write<u8> for Spi<'a> {
+impl Write<u8> for Spi {
     type Error = Error;
 
     fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
@@ -205,7 +205,7 @@ impl <'a> Write<u8> for Spi<'a> {
     }
 }
 
-impl <'a> Transactional<u8> for Spi<'a> {
+impl Transactional<u8> for Spi {
     type Error = Error;
 
     fn exec<'b>(&mut self, operations: &mut [Operation<'b, u8>]) -> Result<(), Self::Error> {
@@ -223,12 +223,12 @@ impl <'a> Transactional<u8> for Spi<'a> {
 
 
 /// InputPin object implements embedded-hal InputPin traits for the CP2130
-pub struct InputPin<'a> {
+pub struct InputPin{
     index: u8,
-    inner: Arc<Mutex<Inner<'a>>>,
+    inner: Arc<Mutex<Inner>>,
 }
 
-impl <'a> embedded_hal::digital::v2::InputPin for InputPin<'a> {
+impl embedded_hal::digital::v2::InputPin for InputPin{
     type Error = Error;
 
     fn is_high(&self) -> Result<bool, Self::Error> {
@@ -242,13 +242,13 @@ impl <'a> embedded_hal::digital::v2::InputPin for InputPin<'a> {
 }
 
 /// OutputPin object implements embedded-hal OutputPin traits for the CP2130
-pub struct OutputPin<'a> {
+pub struct OutputPin{
     index: u8,
     mode: GpioMode,
-    inner: Arc<Mutex<Inner<'a>>>,
+    inner: Arc<Mutex<Inner>>,
 }
 
-impl <'a> embedded_hal::digital::v2::OutputPin for OutputPin<'a> {
+impl embedded_hal::digital::v2::OutputPin for OutputPin{
     type Error = Error;
 
     fn set_high(&mut self) -> Result<(), Self::Error> {

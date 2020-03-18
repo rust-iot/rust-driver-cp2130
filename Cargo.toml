@@ -15,7 +15,7 @@ util = [ "structopt", "simplelog", "rand", "hex" ]
 default = [ "util" ]
 
 [dependencies]
-libusb = "0.3"
+rusb = { version = "0.5.5" }
 libc = "0.2.66"
 log = "0.4.8"
 bitflags = "1.2.1"
