@@ -15,6 +15,9 @@ extern crate byteorder;
 #[macro_use]
 extern crate lazy_static;
 
+extern crate failure;
+use failure::Fail;
+
 extern crate embedded_hal;
 pub use embedded_hal::spi::{Mode as SpiMode};
 
@@ -30,15 +33,24 @@ pub mod manager;
 
 pub mod prelude;
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum Error {
 //    Io(IoError),
+    #[fail(display = "Libusb error: {:?}", 0)]
     Usb(libusb::Error),
+
+    #[fail(display = "No matching endpoint languages found")]
     NoLanguages,
+
+    #[fail(display = "No valid endpoint configuration found")]
     Configurations,
+    #[fail(display = "No matching endpoint found")]
     Endpoint,
+    #[fail(display = "GPIO pin already in use")]
     GpioInUse,
+    #[fail(display = "Invalid SPI index")]
     InvalidIndex,
+    #[fail(display = "Invalid SPI baud rate")]
     InvalidBaud,
 }
 
