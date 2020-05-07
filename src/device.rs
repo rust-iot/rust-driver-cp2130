@@ -297,7 +297,7 @@ pub enum SpiClock {
 }
 
 /// SPI operation delay added to transaction time to ensure we don't clobber previous SPI transactions
-pub const SPI_OP_DELAY_US: u64 = 50;
+pub const SPI_OP_DELAY_US: u64 = 100;
 
 impl SpiClock {
     pub fn freq(&self) -> u64 {
