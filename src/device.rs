@@ -3,7 +3,7 @@
 //! 
 //! Copyright 2019 Ryan Kurte
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::str::FromStr;
 
 use byteorder::{LE, BE, ByteOrder};
@@ -296,6 +296,9 @@ pub enum SpiClock {
     Clock375MHz,
 }
 
+/// SPI operation delay added to transaction time to ensure we don't clobber previous SPI transactions
+pub const SPI_OP_DELAY_US: u64 = 50;
+
 impl SpiClock {
     pub fn freq(&self) -> u64 {
         match self {
@@ -310,7 +313,7 @@ impl SpiClock {
 
     pub fn transfer_time(&self, len_bytes: u64) -> std::time::Duration {
         let micros = len_bytes * 8 * 1_000_000 / self.freq();
-        Duration::from_micros(micros)
+        Duration::from_micros(micros + SPI_OP_DELAY_US)
     }
 }
 
@@ -548,7 +551,7 @@ impl <'a> Inner<'a> {
         (&mut cmd[8..]).copy_from_slice(buff);
 
         let t = self.spi_clock.transfer_time(buff.len() as u64);
-        debug!("SPI write (cmd: {:?} time: {} us)", cmd, t.as_micros());
+        trace!("SPI write (cmd: {:?} time: {} us)", cmd, t.as_micros());
 
         self.handle.write_bulk(
             self.endpoints.write.address,
@@ -557,11 +560,19 @@ impl <'a> Inner<'a> {
         )?;
 
         // Wait for operation to complete so we don't confuse the device
-        std::thread::sleep(t);
+        // IMPORTANT NOTE: THIS IS A LOAD BEARING DELAY
+        self.delay(t);
+
+        //self.delay(Duration::from_millis(1));
 
         trace!("SPI write done");
 
         Ok(())
+    }
+
+    fn delay(&mut self, d: Duration) {
+        let n = SystemTime::now();
+        while n.elapsed().unwrap() < d {}
     }
 
     // Transfer (write-read) to and from the SPI device
@@ -576,7 +587,7 @@ impl <'a> Inner<'a> {
         (&mut cmd[8..]).copy_from_slice(buff_out);
 
         let total_time = self.spi_clock.transfer_time(buff_out.len() as u64);
-        debug!("SPI transfer (cmd: {:?} time: {} us)", cmd, total_time.as_micros());
+        trace!("SPI transfer (cmd: {:?} time: {} us)", cmd, total_time.as_micros());
 
         self.handle.write_bulk(
             self.endpoints.write.address,
@@ -609,7 +620,7 @@ impl <'a> Inner<'a> {
             index += n;
 
             // Wait for operation to complete before we continue
-            std::thread::sleep(t);
+            self.delay(t);
         }
 
         trace!("SPI transfer done");
