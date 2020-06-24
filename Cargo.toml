@@ -11,6 +11,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+transactional = [] # Transactional feature guards spi::Transactional impl currently in testing
 util = [ "structopt", "simplelog", "rand", "hex" ]
 default = [ "util" ]
 
@@ -24,8 +25,7 @@ lazy_static = "1.4.0"
 failure = "0.1.7"
 
 [dependencies.embedded-hal]
-version = "0.2.3"
-features = [ "unproven" ]
+version = "1.0.0-alpha.0"
 
 [dependencies.structopt]
 version = "0.3.5"
@@ -48,8 +48,3 @@ optional = true
 name = "cp2130-util"
 path = "src/cli.rs"
 required-features = [ "util" ]
-
-
-[patch.crates-io]
-embedded-hal = { git = "https://github.com/ryankurte/embedded-hal", branch = "feature/spi-transactions" }
-#libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/" }
