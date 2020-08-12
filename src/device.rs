@@ -249,6 +249,7 @@ impl <'a> Inner<'a> {
         //control.configure(&mut handle)?;
 
         // Detach kernel driver if required
+        #[cfg(not(target_os = "windows"))]
         if handle.kernel_driver_active(control.iface)? {
             debug!("Detaching kernel driver");
             handle.detach_kernel_driver(control.iface)?;
