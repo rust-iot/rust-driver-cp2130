@@ -53,3 +53,6 @@ required-features = [ "util" ]
 [patch.crates-io]
 # Patch to e-h master for transactional SPI support, remove at v1.0.0-alpha.3
 embedded-hal = { git = "https://github.com/rust-embedded/embedded-hal", branch = "master" }
+
+# Patch to support better discovery of libusb
+libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/" }
