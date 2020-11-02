@@ -70,10 +70,10 @@ jobs:
 
     - name: Install libusb (apt armv7)
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'armv7-unknown-linux-gnueabihf' }}
-      uses: ryankurte/aption-apt@v0.2.0
-      with:
-        architectures: armhf
-        packages: libusb-1.0:armhf libusb-dev:armhf
+      run: |
+        sudo dpkg add-architecture armhf
+        sudo apt update
+        sudo apt install libusb-1.0:armhf libusb-dev:armhf
 
     - name: Install libusb (vcpkg)
       if: ${{ matrix.os == 'windows-latest' }}
