@@ -70,7 +70,7 @@ jobs:
 
     - name: Install libusb (apt armv7)
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'armv7-unknown-linux-gnueabihf' }}
-      uses: ryankurte/aption-apt@master
+      uses: ryankurte/aption-apt@v0.2
       with:
         architectures: armhf
         packages: libusb-1.0:armhf libusb-dev:armhf
@@ -81,6 +81,7 @@ jobs:
         vcpkg integrate install
         vcpkg install libusb:x64-windows-static
         echo "LIBUSB_DIR=$VCPKG_DIRECTORY/installed/x64-windows-static/" >> $GITHUB_ENV
+        echo "LIBUSB_STATIC=1" >> $GITHUB_ENV
 
     - name: Cache vcpkg
       if: ${{ matrix.os == 'windows-latest' }}
