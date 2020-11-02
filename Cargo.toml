@@ -55,4 +55,4 @@ required-features = [ "util" ]
 embedded-hal = { git = "https://github.com/rust-embedded/embedded-hal", branch = "master" }
 
 # Patch to support better discovery of libusb, oh to remove this...
-libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/" }
+libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/", branch = "master" }

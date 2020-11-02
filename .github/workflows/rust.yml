@@ -80,9 +80,7 @@ jobs:
       run: |
         vcpkg integrate install
         vcpkg install libusb:x64-windows-static
-        echo "LIBUSB_DIR=$VCPKG_DIRECTORY/installed/x64-windows-static/" >> $GITHUB_ENV
-        echo "Using VCKPKG from: $VCPKG_DIRECTORY"
-        cat $GITHUB_ENV
+        echo "LIBUSB_DIR=C:/vcpkg/installed/x64-windows-static/" >> $GITHUB_ENV
 
     - name: Cache vcpkg
       if: ${{ matrix.os == 'windows-latest' }}
