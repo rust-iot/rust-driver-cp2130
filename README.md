@@ -6,8 +6,9 @@ A driver for the Silicon Labs [CP2130](https://www.silabs.com/interface/usb-brid
 
 WIP. Basic functionality working, PRs for extended features (non-volatile programming, alternate pin modes, etc.) are absolutely welcome.
 
+
+![Build Status](https://github.com/ryankurte/rust-driver-cp2130/workflows/Rust/badge.svg)
 [![GitHub tag](https://img.shields.io/github/tag/ryankurte/rust-driver-cp2130.svg)](https://github.com/ryankurte/rust-driver-cp2130)
-[![Travis Build Status](https://travis-ci.org/ryankurte/rust-driver-cp2130.svg?branch=master)](https://travis-ci.org/ryankurte/rust-driver-cp2130)
 [![Crates.io](https://img.shields.io/crates/v/driver-cp2130.svg)](https://crates.io/crates/driver-cp2130)
 [![Docs.rs](https://docs.rs/driver-cp2130/badge.svg)](https://docs.rs/driver-cp2130)
 
