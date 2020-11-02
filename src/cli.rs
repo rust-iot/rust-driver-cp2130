@@ -10,9 +10,7 @@ use structopt::StructOpt;
 extern crate simplelog;
 use simplelog::{TermLogger, LevelFilter, TerminalMode};
 
-extern crate driver_cp2130;
-use driver_cp2130::manager::{Manager, Filter};
-use driver_cp2130::{Cp2130, SpiConfig, Device, GpioMode, GpioLevel};
+use driver_cp2130::prelude::*;
 
 extern crate embedded_hal;
 use embedded_hal::blocking::spi::*;
@@ -32,6 +30,9 @@ pub struct Options {
 
     #[structopt(flatten)]
     pub filter: Filter,
+
+    #[structopt(flatten)]
+    pub options: UsbOptions,
 
     #[structopt(long, default_value="0")]
     /// Device index (to select from multiple devices)
@@ -131,7 +132,7 @@ fn main() {
     let (device, descriptor) = Manager::device(opts.filter, opts.index).unwrap();
 
     // Create CP2130 connection
-    let mut cp2130 = Cp2130::new(device, descriptor).unwrap();
+    let mut cp2130 = Cp2130::new(device, descriptor, opts.options).unwrap();
 
     debug!("Device connected");
 
