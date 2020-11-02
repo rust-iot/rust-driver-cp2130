@@ -168,9 +168,38 @@ struct Endpoint {
     address: u8
 }
 
+/// Options for creating a device instance
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
+pub struct UsbOptions {
+    #[cfg_attr(feature = "structopt", structopt(long))]
+    /// Detach kernel driver if required
+    pub detach_kernel_driver: bool,
+
+    #[cfg_attr(feature = "structopt", structopt(long))]
+    /// Attempt to claim interface
+    pub claim_interface: bool,
+}
+
+impl Default for UsbOptions {
+    /// Generate os-specific defaults for connection options
+    fn default() -> Self {
+        Self {
+            #[cfg(target_os = "linux")]
+            detach_kernel_driver: false,
+            #[cfg(target_os = "windows")]
+            detach_kernel_driver: false,
+            #[cfg(target_os = "macos")]
+            detach_kernel_driver: true,
+
+            claim_interface: true,
+        }
+    }
+}
+
 impl <'a> Inner<'a> {
     /// Create a new CP2130 instance from a libusb device and descriptor
-    pub fn new(device: UsbDevice<'a>, descriptor: DeviceDescriptor) -> Result<(Self, Info), Error> {
+    pub fn new(device: UsbDevice<'a>, descriptor: DeviceDescriptor, opts: UsbOptions) -> Result<(Self, Info), Error> {
         let timeout = Duration::from_millis(200);
         
         // Fetch device handle
@@ -249,16 +278,29 @@ impl <'a> Inner<'a> {
         //control.configure(&mut handle)?;
 
         // Detach kernel driver if required
-        if handle.kernel_driver_active(control.iface)? {
-            debug!("Detaching kernel driver");
-            handle.detach_kernel_driver(control.iface)?;
-            // TODO: track this and re-enable on closing?
+        // TODO: track this and re-enable kernel driver on closing?
+        debug!("Checking for active kernel driver");
+        match (handle.kernel_driver_active(control.iface)?, opts.detach_kernel_driver) {
+            (true, true) => {
+                debug!("Detaching kernel driver");
+                handle.detach_kernel_driver(control.iface)?;
+            },
+            (true, false) => {
+                debug!("Kernel driver active but detach disabled");
+            },
+            (false, _) => {
+                debug!("Kernel driver not active, no detact required");
+            }
         }
 
         // Claim interface
         // Note linux doesn't like this...
-        #[cfg(not(target_os = "linux"))]
-        handle.claim_interface(control.iface)?;
+        if opts.claim_interface {
+            debug!("Claiming device interface");
+            handle.claim_interface(control.iface)?;
+        } else {
+            debug!("Skipping claim device interface");
+        }
 
         // Map endpoints
         let write = match write {

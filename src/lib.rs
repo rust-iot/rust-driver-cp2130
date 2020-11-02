@@ -25,7 +25,7 @@ extern crate libusb;
 use libusb::{Device as UsbDevice, DeviceDescriptor};
 
 pub mod device;
-pub use crate::device::{GpioMode, GpioLevel, SpiConfig, SpiClock};
+pub use crate::device::{UsbOptions, GpioMode, GpioLevel, SpiConfig, SpiClock};
 
 use crate::device::*;
 
@@ -92,10 +92,10 @@ pub trait Device {
 
 impl <'a> Cp2130<'a> {
     /// Create a new CP2130 instance from a libusb device and descriptor
-    pub fn new(device: UsbDevice<'a>, descriptor: DeviceDescriptor) -> Result<Self, Error> {
+    pub fn new(device: UsbDevice<'a>, descriptor: DeviceDescriptor, options: UsbOptions) -> Result<Self, Error> {
         
         // Connect to device
-        let (inner, info) = Inner::new(device, descriptor)?;
+        let (inner, info) = Inner::new(device, descriptor, options)?;
         let inner = Arc::new(Mutex::new(inner));
 
         // Create wrapper object
@@ -217,9 +217,8 @@ impl <'a> Write<u8> for Spi<'a> {
     }
 }
 
-#[cfg(feature = "transactional")]
+/// Default impl for transactional SPI
 impl <'a> spi::transactional::Default<u8> for Spi<'a> {}
-
 
 /// InputPin object implements embedded-hal InputPin traits for the CP2130
 pub struct InputPin<'a> {

@@ -8,10 +8,7 @@ keywords = [ "driver", "cp2130", "usb", "spi", "embedded" ]
 license = "MPL-2.0"
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [features]
-transactional = [] # Transactional feature guards spi::Transactional impl currently in testing
 util = [ "structopt", "simplelog", "rand", "hex" ]
 default = [ "util" ]
 
@@ -25,7 +22,7 @@ lazy_static = "1.4.0"
 failure = "0.1.7"
 
 [dependencies.embedded-hal]
-version = "1.0.0-alpha.0"
+version = "1.0.0-alpha.2"
 
 [dependencies.structopt]
 version = "0.3.5"
@@ -52,3 +49,7 @@ linux-embedded-hal = "0.3.0"
 name = "cp2130-util"
 path = "src/cli.rs"
 required-features = [ "util" ]
+
+[patch.crates-io]
+# Patch to e-h master for transactional SPI support, remove at v1.0.0-alpha.3
+embedded-hal = { git = "https://github.com/rust-embedded/embedded-hal", branch = "master" }

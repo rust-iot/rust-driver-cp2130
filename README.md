@@ -19,8 +19,6 @@ You can install the utility with `cargo install driver-cp2130` or grab a pre-com
 
 You may wish to copy [40-cp2130.rules](40-cp2130.rules) to `/etc/udev/rules.d` to allow all users with `plugdev` permissions to interact with the CP2130 device.
 
-
-
 ## References
 
 - Datasheet: https://www.silabs.com/documents/public/data-sheets/CP2130.pdf
