@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex};
 #[macro_use]
 extern crate log;
 
-#[macro_use]
 extern crate bitflags;
 extern crate byteorder;
 

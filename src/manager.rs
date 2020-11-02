@@ -53,6 +53,8 @@ impl Default for Filter {
 impl Manager {
     /// Fetch a libusb device list (for filtering and connecting to devices)
     pub fn devices() -> Result<DeviceList<'static>, Error> {
+        debug!("Fetching available USB devices");
+
         // Attempt to fetch device list
         let devices = match CONTEXT.devices() {
             Ok(v) => v,

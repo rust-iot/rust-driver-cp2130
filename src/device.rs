@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 use std::str::FromStr;
 
 use byteorder::{LE, BE, ByteOrder};
+use bitflags::bitflags;
 
 use libusb::{Device as UsbDevice, DeviceDescriptor, DeviceHandle, Direction, TransferType};
 
@@ -186,12 +187,17 @@ impl Default for UsbOptions {
     fn default() -> Self {
         Self {
             #[cfg(target_os = "linux")]
-            detach_kernel_driver: false,
+            detach_kernel_driver: true,
             #[cfg(target_os = "windows")]
             detach_kernel_driver: false,
             #[cfg(target_os = "macos")]
             detach_kernel_driver: true,
 
+            #[cfg(target_os = "linux")]
+            claim_interface: false,
+            #[cfg(target_os = "windows")]
+            claim_interface: true,
+            #[cfg(target_os = "macos")]
             claim_interface: true,
         }
     }
