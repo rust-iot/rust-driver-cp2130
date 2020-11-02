@@ -280,17 +280,18 @@ impl <'a> Inner<'a> {
         // Detach kernel driver if required
         // TODO: track this and re-enable kernel driver on closing?
         debug!("Checking for active kernel driver");
-        match (handle.kernel_driver_active(control.iface)?, opts.detach_kernel_driver) {
-            (true, true) => {
-                debug!("Detaching kernel driver");
-                handle.detach_kernel_driver(control.iface)?;
-            },
-            (true, false) => {
-                debug!("Kernel driver active but detach disabled");
-            },
-            (false, _) => {
-                debug!("Kernel driver not active, no detact required");
+        if opts.detach_kernel_driver {
+            match handle.kernel_driver_active(control.iface)? {
+                true => {
+                    debug!("Detaching kernel driver");
+                    handle.detach_kernel_driver(control.iface)?;
+                },
+                false => {
+                    debug!("Kernel driver active but detach disabled");
+                },
             }
+        } else {
+            debug!("Skipping kernel driver attach check");
         }
 
         // Claim interface
