@@ -194,7 +194,7 @@ impl Default for UsbOptions {
             detach_kernel_driver: true,
 
             #[cfg(target_os = "linux")]
-            claim_interface: false,
+            claim_interface: true,
             #[cfg(target_os = "windows")]
             claim_interface: true,
             #[cfg(target_os = "macos")]
@@ -293,7 +293,7 @@ impl <'a> Inner<'a> {
                     handle.detach_kernel_driver(control.iface)?;
                 },
                 false => {
-                    debug!("Kernel driver active but detach disabled");
+                    debug!("Kernel driver inactive");
                 },
             }
         } else {
@@ -301,7 +301,6 @@ impl <'a> Inner<'a> {
         }
 
         // Claim interface
-        // Note linux doesn't like this...
         if opts.claim_interface {
             debug!("Claiming device interface");
             handle.claim_interface(control.iface)?;
