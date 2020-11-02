@@ -194,7 +194,7 @@ impl Default for UsbOptions {
             detach_kernel_driver: true,
 
             #[cfg(target_os = "linux")]
-            claim_interface: true,
+            claim_interface: false,
             #[cfg(target_os = "windows")]
             claim_interface: true,
             #[cfg(target_os = "macos")]
