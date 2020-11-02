@@ -47,6 +47,8 @@ pub struct Options {
 pub enum Command {
     /// Fetch the chip version
     Version,
+    /// Fetch chip info
+    Info,
     /// Set a GPIO output
     SetOutput {
         #[structopt(long, default_value="6")]
@@ -137,6 +139,10 @@ fn main() {
     debug!("Device connected");
 
     match opts.command {
+        Command::Info => {
+            let i = cp2130.info();
+            info!("Device info: {:?}", i);
+        }
         Command::Version => {
             let v = cp2130.version().unwrap();
             info!("Device version: {}", v);
