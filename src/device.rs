@@ -285,8 +285,8 @@ impl <'a> Inner<'a> {
 
         // Detach kernel driver if required
         // TODO: track this and re-enable kernel driver on closing?
-        debug!("Checking for active kernel driver");
         if opts.detach_kernel_driver {
+            debug!("Checking for active kernel driver");
             match handle.kernel_driver_active(control.iface)? {
                 true => {
                     debug!("Detaching kernel driver");

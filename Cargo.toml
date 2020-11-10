@@ -22,7 +22,7 @@ lazy_static = "1.4.0"
 failure = "0.1.7"
 
 [dependencies.embedded-hal]
-version = "=1.0.0-alpha.2"
+version = "1.0.0-alpha.3"
 
 [dependencies.structopt]
 version = "0.3.5"
@@ -51,8 +51,6 @@ path = "src/cli.rs"
 required-features = [ "util" ]
 
 [patch.crates-io]
-# Patch to e-h master for transactional SPI support, remove at v1.0.0-alpha.3
-embedded-hal = { git = "https://github.com/rust-embedded/embedded-hal", branch = "master" }
-
 # Patch to support better discovery of libusb, oh to remove this...
 libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/", branch = "master" }
+
