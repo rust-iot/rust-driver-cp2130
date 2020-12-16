@@ -41,7 +41,7 @@ version = "0.7.2"
 optional = true
 
 [dev-dependencies]
-ssd1306 = "0.3.1"
+ssd1306 = "0.4.2"
 embedded-graphics = "0.6.2"
 linux-embedded-hal = "0.3.0"
 
