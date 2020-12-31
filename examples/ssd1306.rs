@@ -1,6 +1,7 @@
 //! Test ssd1306 on linux with cp2130 usb to spi bridge.
 
 use driver_cp2130::prelude::*;
+
 use embedded_graphics::{
     fonts::{Font6x8, Text},
     pixelcolor::BinaryColor,
@@ -8,6 +9,7 @@ use embedded_graphics::{
     style::TextStyleBuilder,
 };
 use linux_embedded_hal::Delay;
+
 use ssd1306::{prelude::*, Builder};
 
 fn main() {
@@ -15,7 +17,7 @@ fn main() {
     let (device, descriptor) = Manager::device(Filter::default(), 0).unwrap();
 
     // Create CP2130 connection
-    let cp2130 = Cp2130::new(device, descriptor).unwrap();
+    let cp2130 = Cp2130::new(device, descriptor, UsbOptions::default()).unwrap();
 
     let spi = cp2130.spi(1, SpiConfig::default()).unwrap();
 
@@ -29,7 +31,7 @@ fn main() {
 
     let mut delay = Delay {};
 
-    let mut disp: GraphicsMode<_> = Builder::new().connect_spi(spi, dc).into();
+    let mut disp: GraphicsMode<_, _> = Builder::new().connect_spi(spi, dc).into();
 
     disp.reset(&mut rst, &mut delay).unwrap();
     disp.init().unwrap();
