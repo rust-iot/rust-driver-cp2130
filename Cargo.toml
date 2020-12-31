@@ -13,13 +13,13 @@ util = [ "structopt", "simplelog", "rand", "hex" ]
 default = [ "util" ]
 
 [dependencies]
-libusb = "0.3"
 libc = "0.2.66"
 log = "0.4.8"
 bitflags = "1.2.1"
 byteorder = "1.3.2"
 lazy_static = "1.4.0"
 failure = "0.1.7"
+rusb = "0.6.5"
 
 [dependencies.embedded-hal]
 version = "1.0.0-alpha.3"
@@ -49,8 +49,3 @@ linux-embedded-hal = "0.3.0"
 name = "cp2130-util"
 path = "src/cli.rs"
 required-features = [ "util" ]
-
-[patch.crates-io]
-# Patch to support better discovery of libusb, oh to remove this...
-libusb-sys = { git = "https://github.com/cmsd2/libusb-sys/", branch = "master" }
-

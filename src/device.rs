@@ -9,7 +9,7 @@ use std::str::FromStr;
 use byteorder::{LE, BE, ByteOrder};
 use bitflags::bitflags;
 
-use libusb::{Device as UsbDevice, DeviceDescriptor, DeviceHandle, Direction, TransferType};
+use rusb::{Device as UsbDevice, Context as UsbContext, DeviceDescriptor, DeviceHandle, Direction, TransferType};
 
 use embedded_hal::spi::{Mode as SpiMode, Phase, Polarity, MODE_0};
 
@@ -142,9 +142,9 @@ pub enum TransferCommand {
 
 /// Inner struct contains CP2130 IO functions
 /// This is used to split SPI and GPIO components
-pub(crate) struct Inner<'a> {
-    _device: UsbDevice<'a>,
-    handle: DeviceHandle<'a>,
+pub(crate) struct Inner {
+    _device: UsbDevice<UsbContext>,
+    handle: DeviceHandle<UsbContext>,
     endpoints: Endpoints,
 
     pub(crate) gpio_allocated: [bool; 11],
@@ -203,9 +203,9 @@ impl Default for UsbOptions {
     }
 }
 
-impl <'a> Inner<'a> {
+impl Inner {
     /// Create a new CP2130 instance from a libusb device and descriptor
-    pub fn new(device: UsbDevice<'a>, descriptor: DeviceDescriptor, opts: UsbOptions) -> Result<(Self, Info), Error> {
+    pub fn new(device: UsbDevice<UsbContext>, descriptor: DeviceDescriptor, opts: UsbOptions) -> Result<(Self, Info), Error> {
         let timeout = Duration::from_millis(200);
         
         // Fetch device handle
@@ -441,7 +441,7 @@ impl Default for SpiConfig {
 
 
 
-impl <'a> Inner<'a> {
+impl Inner{
 
     pub(crate) fn spi_configure(&mut self, channel: u8, config: SpiConfig) -> Result<(), Error> {
         debug!("Setting SPI channel: {:?} clock: {:?} cs mode: {:?}", channel, config.clock, config.cs_mode);
