@@ -3,7 +3,7 @@
 //! 
 //! Copyright 2019 Ryan Kurte
 
-pub use libusb::{Device as UsbDevice, DeviceList, DeviceDescriptor};
+pub use rusb::{Device as UsbDevice, UsbContext as _, Context as UsbContext, DeviceList, DeviceDescriptor};
 
 #[cfg(feature = "structopt")]
 use std::num::ParseIntError;
@@ -16,15 +16,15 @@ use crate::device::{VID, PID};
 
 lazy_static!{
     // LibUSB context created automagically
-    static ref CONTEXT: libusb::Context = {
-        libusb::Context::new().unwrap()
+    static ref CONTEXT: UsbContext = {
+        UsbContext::new().unwrap()
     };
 }
 
 /// Manager object maintains libusb context and provides
 /// methods for connecting to matching devices
 pub struct Manager {
-    //context: libusb::Context,
+    //context: rusb::Context,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,7 +52,7 @@ impl Default for Filter {
 
 impl Manager {
     /// Fetch a libusb device list (for filtering and connecting to devices)
-    pub fn devices() -> Result<DeviceList<'static>, Error> {
+    pub fn devices() -> Result<DeviceList<UsbContext>, Error> {
         debug!("Fetching available USB devices");
 
         // Attempt to fetch device list
@@ -67,7 +67,7 @@ impl Manager {
         Ok(devices)
     }
 
-    pub fn devices_filtered(filter: Filter) -> Result<Vec<(UsbDevice<'static>, DeviceDescriptor)>, Error> {
+    pub fn devices_filtered(filter: Filter) -> Result<Vec<(UsbDevice<UsbContext>, DeviceDescriptor)>, Error> {
         let devices = Self::devices()?;
 
         let mut matches = vec![];
@@ -92,7 +92,7 @@ impl Manager {
         Ok(matches)
     }
 
-    pub fn device(filter: Filter, index: usize) -> Result<(UsbDevice<'static>, DeviceDescriptor), Error> {
+    pub fn device(filter: Filter, index: usize) -> Result<(UsbDevice<UsbContext>, DeviceDescriptor), Error> {
         // Find matching devices
         let mut matches = Self::devices_filtered(filter)?;
 
