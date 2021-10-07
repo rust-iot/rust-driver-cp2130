@@ -3,14 +3,15 @@
 use driver_cp2130::prelude::*;
 
 use embedded_graphics::{
-    fonts::{Font6x8, Text},
+    text::Text,
+    mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
-    style::TextStyleBuilder,
 };
 use linux_embedded_hal::Delay;
 
-use ssd1306::{prelude::*, Builder};
+use ssd1306::{prelude::*, Ssd1306};
+use embedded_hal_compat::{ReverseCompat as _};
 
 fn main() {
     // Find matching devices
@@ -25,28 +26,26 @@ fn main() {
         .gpio_out(0, GpioMode::PushPull, GpioLevel::Low)
         .unwrap();
 
-    let mut rst = cp2130
+    let rst = cp2130
         .gpio_out(1, GpioMode::PushPull, GpioLevel::Low)
         .unwrap();
 
     let mut delay = Delay {};
 
-    let mut disp: GraphicsMode<_, _> = Builder::new().connect_spi(spi, dc).into();
+    let interface = SPIInterfaceNoCS::new(spi.reverse(), dc.reverse());
+    let mut disp = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
+        .into_buffered_graphics_mode();
 
-    disp.reset(&mut rst, &mut delay).unwrap();
+    disp.reset(&mut rst.reverse(), &mut delay).unwrap();
     disp.init().unwrap();
 
-    let text_style = TextStyleBuilder::new(Font6x8)
-        .text_color(BinaryColor::On)
-        .build();
+    let text_style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
 
-    Text::new("Hello world!", Point::zero())
-        .into_styled(text_style)
+    Text::new("Hello world!", Point::zero(), text_style)
         .draw(&mut disp)
         .unwrap();
 
-    Text::new("Hello Rust!", Point::new(0, 16))
-        .into_styled(text_style)
+    Text::new("Hello Rust!", Point::new(0, 16), text_style)
         .draw(&mut disp)
         .unwrap();
 
