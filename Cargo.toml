@@ -1,6 +1,6 @@
 [package]
 name = "driver-cp2130"
-version = "1.0.0-alpha.3"
+version = "1.0.0-alpha.4"
 authors = ["Ryan Kurte <ryankurte@gmail.com>"]
 description = "libusb based driver for the CP2130 USB-SPI bridge by Silicon Labs"
 repository = "https://github.com/ryankurte/rust-driver-cp2130"
