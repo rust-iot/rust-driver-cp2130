@@ -187,29 +187,43 @@ pub struct Spi {
     inner: Arc<Mutex<Inner>>,
 }
 
-use embedded_hal::blocking::spi::{self, Write, Transfer};
 
-impl  Transfer<u8> for Spi {
+impl embedded_hal::spi::blocking::Transfer<u8> for Spi {
     type Error = Error;
 
-    fn try_transfer<'w>(&mut self, words: &'w mut [u8] ) -> Result<&'w [u8], Self::Error> {
+    fn transfer<'w>(&mut self, words: &'w mut [u8] ) -> Result<(), Self::Error> {
         let out = words.to_vec();
         let _n = self.inner.lock().unwrap().spi_write_read(&out, words)?;
-        Ok(words)
+        Ok(())
     }
 }
 
-impl  Write<u8> for Spi {
+impl embedded_hal::spi::blocking::Write<u8> for Spi {
     type Error = Error;
 
-    fn try_write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
+    fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
         let _n = self.inner.lock().unwrap().spi_write(words)?;
         Ok(())
     }
 }
 
+use embedded_hal::spi::blocking::{Operation, Write as _, Transfer as _};
+
 /// Default impl for transactional SPI
-impl  spi::transactional::Default<u8> for Spi {}
+impl embedded_hal::spi::blocking::Transactional<u8> for Spi {
+    type Error = Error;
+
+    fn exec<'a>(&mut self, operations: &mut [Operation<'a, u8>]) -> Result<(), Self::Error> {
+        for o in operations {
+            match o {
+                Operation::Write(w) => self.write(w)?,
+                Operation::Transfer(d) => self.transfer(d)?,
+            }
+        }
+
+        Ok(())
+    }
+}
 
 /// InputPin object implements embedded-hal InputPin traits for the CP2130
 pub struct InputPin {
@@ -217,15 +231,15 @@ pub struct InputPin {
     inner: Arc<Mutex<Inner>>,
 }
 
-impl  embedded_hal::digital::InputPin for InputPin {
+impl  embedded_hal::digital::blocking::InputPin for InputPin {
     type Error = Error;
 
-    fn try_is_high(&self) -> Result<bool, Self::Error> {
+    fn is_high(&self) -> Result<bool, Self::Error> {
         self.inner.lock().unwrap().get_gpio_level(self.index)
     }
 
-    fn try_is_low(&self) -> Result<bool, Self::Error> {
-        let v = self.try_is_high()?;
+    fn is_low(&self) -> Result<bool, Self::Error> {
+        let v = self.is_high()?;
         Ok(!v)
     }
 }
@@ -237,14 +251,14 @@ pub struct OutputPin {
     inner: Arc<Mutex<Inner>>,
 }
 
-impl  embedded_hal::digital::OutputPin for OutputPin {
+impl  embedded_hal::digital::blocking::OutputPin for OutputPin {
     type Error = Error;
 
-    fn try_set_high(&mut self) -> Result<(), Self::Error> {
+    fn set_high(&mut self) -> Result<(), Self::Error> {
         self.inner.lock().unwrap().set_gpio_mode_level(self.index, self.mode, GpioLevel::High)
     }
 
-    fn try_set_low(&mut self) -> Result<(), Self::Error> {
+    fn set_low(&mut self) -> Result<(), Self::Error> {
         self.inner.lock().unwrap().set_gpio_mode_level(self.index, self.mode, GpioLevel::Low)
     }
 }

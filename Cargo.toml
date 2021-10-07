@@ -23,7 +23,7 @@ failure = "0.1.7"
 rusb = "0.6.5"
 
 [dependencies.embedded-hal]
-version = "1.0.0-alpha.3"
+version = "1.0.0-alpha.5"
 
 [dependencies.structopt]
 version = "0.3.5"
