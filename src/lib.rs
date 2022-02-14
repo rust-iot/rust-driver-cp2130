@@ -51,6 +51,8 @@ impl From<rusb::Error> for Error {
     }
 }
 
+
+
 /// CP2130 provides methods to interact with the device, as well as create new spi and gpio connectors.
 pub struct Cp2130 {
     inner: Arc<Mutex<Inner>>,
@@ -189,17 +191,24 @@ pub struct Spi {
 
 
 impl embedded_hal::spi::blocking::Transfer<u8> for Spi {
-    type Error = Error;
 
-    fn transfer<'w>(&mut self, words: &'w mut [u8] ) -> Result<(), Self::Error> {
-        let out = words.to_vec();
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, words)?;
+    fn transfer<'w>(&mut self, buff: &'w mut [u8], out: &'w [u8]) -> Result<(), Self::Error> {
+        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
         Ok(())
     }
 }
 
+impl embedded_hal::spi::blocking::TransferInplace<u8> for Spi {
+
+    fn transfer_inplace<'w>(&mut self, buff: &'w mut [u8]) -> Result<(), Self::Error> {
+        let out = buff.to_vec();
+        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
+        Ok(())
+    }
+}
+
+
 impl embedded_hal::spi::blocking::Write<u8> for Spi {
-    type Error = Error;
 
     fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
         let _n = self.inner.lock().unwrap().spi_write(words)?;
@@ -207,17 +216,27 @@ impl embedded_hal::spi::blocking::Write<u8> for Spi {
     }
 }
 
-use embedded_hal::spi::blocking::{Operation, Write as _, Transfer as _};
+impl embedded_hal::spi::blocking::Read<u8> for Spi {
+
+    fn read(&mut self, buff: &mut [u8] ) -> Result<(), Self::Error> {
+        let out = vec![0u8; buff.len()];
+        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
+        Ok(())
+    }
+}
+
+use embedded_hal::spi::blocking::{Operation, Read as _, Write as _, Transfer as _, TransferInplace};
 
 /// Default impl for transactional SPI
 impl embedded_hal::spi::blocking::Transactional<u8> for Spi {
-    type Error = Error;
 
     fn exec<'a>(&mut self, operations: &mut [Operation<'a, u8>]) -> Result<(), Self::Error> {
         for o in operations {
             match o {
                 Operation::Write(w) => self.write(w)?,
-                Operation::Transfer(d) => self.transfer(d)?,
+                Operation::Transfer(r, w) => self.transfer(r, w)?,
+                Operation::TransferInplace(b) => self.transfer_inplace(b)?,
+                Operation::Read(r) => self.read(r)?,
             }
         }
 
@@ -225,6 +244,15 @@ impl embedded_hal::spi::blocking::Transactional<u8> for Spi {
     }
 }
 
+impl embedded_hal::spi::ErrorType for Spi {
+    type Error = Error;
+}
+
+impl embedded_hal::spi::Error for Error {
+    fn kind(&self) -> embedded_hal::spi::ErrorKind {
+        embedded_hal::spi::ErrorKind::Other
+    }
+}
 /// InputPin object implements embedded-hal InputPin traits for the CP2130
 pub struct InputPin {
     index: u8,
@@ -232,8 +260,6 @@ pub struct InputPin {
 }
 
 impl  embedded_hal::digital::blocking::InputPin for InputPin {
-    type Error = Error;
-
     fn is_high(&self) -> Result<bool, Self::Error> {
         self.inner.lock().unwrap().get_gpio_level(self.index)
     }
@@ -244,6 +270,10 @@ impl  embedded_hal::digital::blocking::InputPin for InputPin {
     }
 }
 
+impl embedded_hal::digital::ErrorType for InputPin {
+    type Error = Error;
+}
+
 /// OutputPin object implements embedded-hal OutputPin traits for the CP2130
 pub struct OutputPin {
     index: u8,
@@ -252,8 +282,6 @@ pub struct OutputPin {
 }
 
 impl  embedded_hal::digital::blocking::OutputPin for OutputPin {
-    type Error = Error;
-
     fn set_high(&mut self) -> Result<(), Self::Error> {
         self.inner.lock().unwrap().set_gpio_mode_level(self.index, self.mode, GpioLevel::High)
     }
@@ -261,4 +289,9 @@ impl  embedded_hal::digital::blocking::OutputPin for OutputPin {
     fn set_low(&mut self) -> Result<(), Self::Error> {
         self.inner.lock().unwrap().set_gpio_mode_level(self.index, self.mode, GpioLevel::Low)
     }
+}
+
+
+impl embedded_hal::digital::ErrorType for OutputPin {
+    type Error = Error;
 }

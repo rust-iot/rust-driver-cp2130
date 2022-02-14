@@ -166,7 +166,7 @@ fn main() {
 
             let mut buff = data.clone();
             
-            spi.transfer(&mut buff).unwrap();
+            spi.transfer_inplace(&mut buff).unwrap();
 
             cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
 
