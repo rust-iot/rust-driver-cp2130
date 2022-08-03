@@ -190,25 +190,23 @@ pub struct Spi {
 }
 
 
-impl embedded_hal::spi::blocking::Transfer<u8> for Spi {
+impl embedded_hal::spi::blocking::SpiBus<u8> for Spi {
 
     fn transfer<'w>(&mut self, buff: &'w mut [u8], out: &'w [u8]) -> Result<(), Self::Error> {
         let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
         Ok(())
     }
-}
 
-impl embedded_hal::spi::blocking::TransferInplace<u8> for Spi {
-
-    fn transfer_inplace<'w>(&mut self, buff: &'w mut [u8]) -> Result<(), Self::Error> {
-        let out = buff.to_vec();
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
+    fn transfer_in_place<'w>(&mut self, data: &'w mut [u8]) -> Result<(), Self::Error> {
+        let mut read_to: Vec<u8> = Vec::with_capacity(data.len());
+        let read_to = read_to.as_mut_slice();
+        self.inner.lock().unwrap().spi_write_read(data, read_to)?;
+        data.copy_from_slice(read_to);
         Ok(())
     }
 }
 
-
-impl embedded_hal::spi::blocking::Write<u8> for Spi {
+impl embedded_hal::spi::blocking::SpiBusWrite<u8> for Spi {
 
     fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
         let _n = self.inner.lock().unwrap().spi_write(words)?;
@@ -216,7 +214,7 @@ impl embedded_hal::spi::blocking::Write<u8> for Spi {
     }
 }
 
-impl embedded_hal::spi::blocking::Read<u8> for Spi {
+impl embedded_hal::spi::blocking::SpiBusRead<u8> for Spi {
 
     fn read(&mut self, buff: &mut [u8] ) -> Result<(), Self::Error> {
         let out = vec![0u8; buff.len()];
@@ -225,21 +223,8 @@ impl embedded_hal::spi::blocking::Read<u8> for Spi {
     }
 }
 
-use embedded_hal::spi::blocking::{Operation, Read as _, Write as _, Transfer as _, TransferInplace};
-
-/// Default impl for transactional SPI
-impl embedded_hal::spi::blocking::Transactional<u8> for Spi {
-
-    fn exec<'a>(&mut self, operations: &mut [Operation<'a, u8>]) -> Result<(), Self::Error> {
-        for o in operations {
-            match o {
-                Operation::Write(w) => self.write(w)?,
-                Operation::Transfer(r, w) => self.transfer(r, w)?,
-                Operation::TransferInplace(b) => self.transfer_inplace(b)?,
-                Operation::Read(r) => self.read(r)?,
-            }
-        }
-
+impl embedded_hal::spi::blocking::SpiBusFlush for Spi {
+    fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 }
