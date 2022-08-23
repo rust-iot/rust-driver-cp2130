@@ -111,7 +111,7 @@ impl Cp2130 {
         // Configure SPI
         inner.spi_configure(channel, config)?;
 
-        Ok(Spi{inner: self.inner.clone(), _channel: channel})
+        Ok(Spi{inner: SpiProxy { bus: self.inner.clone() }, _channel: channel})
     }
 
     /// Create a GPIO OutputPin
@@ -182,23 +182,73 @@ impl  Device for Cp2130 {
     }
 }
 
+#[derive(Debug)]
+pub struct SpiProxy {
+    bus: Arc<Mutex<Inner>>,
+}
+
+impl embedded_hal::spi::blocking::SpiBus<u8> for SpiProxy {
+    fn transfer<'w>(&mut self, buff: &'w mut [u8], out: &'w [u8]) -> Result<(), Self::Error> {
+        let _n = self.bus.lock().unwrap().spi_write_read(&out, buff)?;
+        Ok(())
+    }
+
+    fn transfer_in_place<'w>(&mut self, data: &'w mut [u8]) -> Result<(), Self::Error> {
+        let mut read_to: Vec<u8> = Vec::with_capacity(data.len());
+        let read_to = read_to.as_mut_slice();
+        self.bus.lock().unwrap().spi_write_read(data, read_to)?;
+        data.copy_from_slice(read_to);
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::blocking::SpiBusWrite<u8> for SpiProxy {
+    fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
+        let _n = self.bus.lock().unwrap().spi_write(words)?;
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::blocking::SpiBusRead<u8> for SpiProxy {
+    fn read(&mut self, buff: &mut [u8]) -> Result<(), Self::Error> {
+        let out = vec![0u8; buff.len()];
+        let _n = self.bus.lock().unwrap().spi_write_read(&out, buff)?;
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::blocking::SpiBusFlush for SpiProxy {
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::ErrorType for SpiProxy {
+    type Error = Error;
+}
+
+impl embedded_hal::spi::Error for SpiProxy {
+    fn kind(&self) -> embedded_hal::spi::ErrorKind {
+        embedded_hal::spi::ErrorKind::Other
+    }
+}
+
 /// Spi object implements embedded-hal SPI traits for the CP2130
 pub struct Spi {
     // TODO: use channel configuration
     _channel: u8,
-    inner: Arc<Mutex<Inner>>,
+    inner: SpiProxy,
 }
 
 impl embedded_hal::spi::blocking::SpiDevice for Spi {
-    type Bus = Inner;
+    type Bus = SpiProxy;
 
     fn transaction<R>(
         &mut self,
         f: impl FnOnce(&mut Self::Bus) -> Result<R, <Self::Bus as embedded_hal::spi::ErrorType>::Error>,
     ) -> Result<R, Self::Error> {
-        let mut bus = self.inner.lock().unwrap();
-        // We lock the inner mutex before every transaction, so we don't need an extra mutex here.
-        f(&mut bus)
+        // We lock the inner mutex in every transaction, so we don't need an extra mutex here.
+        f(&mut self.inner)
     }
 }
 
