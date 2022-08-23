@@ -142,7 +142,8 @@ pub enum TransferCommand {
 
 /// Inner struct contains CP2130 IO functions
 /// This is used to split SPI and GPIO components
-pub(crate) struct Inner {
+#[derive(Debug)]
+pub struct Inner {
     _device: UsbDevice<UsbContext>,
     handle: DeviceHandle<UsbContext>,
     endpoints: Endpoints,
@@ -761,4 +762,48 @@ impl Inner{
     }
 }
 
+impl embedded_hal::spi::blocking::SpiBus<u8> for Inner {
+    fn transfer<'w>(&mut self, buff: &'w mut [u8], out: &'w [u8]) -> Result<(), Self::Error> {
+        let _n = self.spi_write_read(&out, buff)?;
+        Ok(())
+    }
 
+    fn transfer_in_place<'w>(&mut self, data: &'w mut [u8]) -> Result<(), Self::Error> {
+        let mut read_to: Vec<u8> = Vec::with_capacity(data.len());
+        let read_to = read_to.as_mut_slice();
+        self.spi_write_read(data, read_to)?;
+        data.copy_from_slice(read_to);
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::blocking::SpiBusWrite<u8> for Inner {
+    fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
+        let _n = self.spi_write(words)?;
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::blocking::SpiBusRead<u8> for Inner {
+    fn read(&mut self, buff: &mut [u8]) -> Result<(), Self::Error> {
+        let out = vec![0u8; buff.len()];
+        let _n = self.spi_write_read(&out, buff)?;
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::blocking::SpiBusFlush for Inner {
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+impl embedded_hal::spi::ErrorType for Inner {
+    type Error = Error;
+}
+
+impl embedded_hal::spi::Error for Inner {
+    fn kind(&self) -> embedded_hal::spi::ErrorKind {
+        embedded_hal::spi::ErrorKind::Other
+    }
+}

@@ -189,43 +189,6 @@ pub struct Spi {
     inner: Arc<Mutex<Inner>>,
 }
 
-
-impl embedded_hal::spi::blocking::SpiBus<u8> for Spi {
-
-    fn transfer<'w>(&mut self, buff: &'w mut [u8], out: &'w [u8]) -> Result<(), Self::Error> {
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
-        Ok(())
-    }
-
-    fn transfer_in_place<'w>(&mut self, data: &'w mut [u8]) -> Result<(), Self::Error> {
-        let mut read_to: Vec<u8> = Vec::with_capacity(data.len());
-        let read_to = read_to.as_mut_slice();
-        self.inner.lock().unwrap().spi_write_read(data, read_to)?;
-        data.copy_from_slice(read_to);
-        Ok(())
-    }
-}
-
-impl embedded_hal::spi::blocking::SpiBusWrite<u8> for Spi {
-
-    fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
-        let _n = self.inner.lock().unwrap().spi_write(words)?;
-        Ok(())
-    }
-}
-
-impl embedded_hal::spi::blocking::SpiBusRead<u8> for Spi {
-
-    fn read(&mut self, buff: &mut [u8] ) -> Result<(), Self::Error> {
-        let out = vec![0u8; buff.len()];
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
-        Ok(())
-    }
-}
-
-impl embedded_hal::spi::blocking::SpiBusFlush for Spi {
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
     }
 }
 
