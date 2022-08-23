@@ -189,6 +189,16 @@ pub struct Spi {
     inner: Arc<Mutex<Inner>>,
 }
 
+impl embedded_hal::spi::blocking::SpiDevice for Spi {
+    type Bus = Inner;
+
+    fn transaction<R>(
+        &mut self,
+        f: impl FnOnce(&mut Self::Bus) -> Result<R, <Self::Bus as embedded_hal::spi::ErrorType>::Error>,
+    ) -> Result<R, Self::Error> {
+        let mut bus = self.inner.lock().unwrap();
+        // We lock the inner mutex before every transaction, so we don't need an extra mutex here.
+        f(&mut bus)
     }
 }
 
