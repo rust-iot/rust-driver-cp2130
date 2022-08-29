@@ -142,6 +142,7 @@ pub enum TransferCommand {
 
 /// Inner struct contains CP2130 IO functions
 /// This is used to split SPI and GPIO components
+#[derive(Debug)]
 pub(crate) struct Inner {
     _device: UsbDevice<UsbContext>,
     handle: DeviceHandle<UsbContext>,
@@ -760,5 +761,4 @@ impl Inner{
         Ok(v)
     }
 }
-
 
