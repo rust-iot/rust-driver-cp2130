@@ -5,13 +5,13 @@
 
 pub use rusb::{Device as UsbDevice, UsbContext as _, Context as UsbContext, DeviceList, DeviceDescriptor};
 
-#[cfg(feature = "structopt")]
+#[cfg(feature = "clap")]
 use std::num::ParseIntError;
 
-#[cfg(feature = "structopt")]
-use structopt::StructOpt;
+#[cfg(feature = "clap")]
+use clap::Parser;
 
-use crate::{Error};
+use crate::Error;
 use crate::device::{VID, PID};
 
 lazy_static!{
@@ -28,18 +28,18 @@ pub struct Manager {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "structopt", derive(StructOpt))]
+#[cfg_attr(feature = "clap", derive(Parser))]
 pub struct Filter {
-    #[cfg_attr(feature = "structopt", structopt(long, default_value="10c4", parse(try_from_str=parse_hex)))]
+    #[cfg_attr(feature = "clap", clap(long, default_value="10c4", value_parser=parse_hex))]
     /// Device Vendor ID (VID) in hex
     pub vid: u16,
 
-    #[cfg_attr(feature = "structopt", structopt(long, default_value="87a0", parse(try_from_str=parse_hex)))]
+    #[cfg_attr(feature = "clap", clap(long, default_value="87a0", value_parser=parse_hex))]
     /// Device Product ID (PID) in hex
     pub pid: u16,
 }
 
-#[cfg(feature = "structopt")]
+#[cfg(feature = "clap")]
 fn parse_hex(src: &str) -> Result<u16, ParseIntError> {
     u16::from_str_radix(src, 16)
 }

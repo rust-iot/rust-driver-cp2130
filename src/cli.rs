@@ -3,8 +3,8 @@
 //! 
 //! Copyright 2019 Ryan Kurte
 
-extern crate structopt;
-use structopt::StructOpt;
+extern crate clap;
+use clap::Parser;
 
 #[macro_use] extern crate log;
 extern crate simplelog;
@@ -13,37 +13,37 @@ use simplelog::{TermLogger, LevelFilter, TerminalMode};
 use driver_cp2130::prelude::*;
 
 extern crate embedded_hal;
-use embedded_hal::spi::blocking::*;
+use embedded_hal::spi::*;
 
 extern crate hex;
 extern crate rand;
 use crate::rand::Rng;
 
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "cp2130-util")]
+#[derive(Debug, Parser)]
+#[clap(name = "cp2130-util")]
 /// CP2130 Utility
 pub struct Options {
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub command: Command,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub filter: Filter,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub options: UsbOptions,
 
-    #[structopt(long, default_value="0")]
+    #[clap(long, default_value="0")]
     /// Device index (to select from multiple devices)
     pub index: usize,
 
-    #[structopt(long = "log-level", default_value="info")]
+    #[clap(long = "log-level", default_value="info")]
     /// Enable verbose logging
     pub level: LevelFilter,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub enum Command {
     /// Fetch the chip version
     Version,
@@ -51,68 +51,68 @@ pub enum Command {
     Info,
     /// Set a GPIO output
     SetOutput {
-        #[structopt(long, default_value="6")]
+        #[clap(long, default_value="6")]
         /// GPIO pin index
         pin: u8,
 
-        #[structopt(long, default_value="push-pull")]
+        #[clap(long, default_value="push-pull")]
         /// GPIO pin mode to set (input, open drain, push-pull)
         mode: GpioMode,
 
-        #[structopt(default_value="high")]
+        #[clap(default_value="high")]
         /// GPIO pin state (high, low)
         state: GpioLevel,
     },
     /// Read a GPIO input
     ReadInput {
-        #[structopt(long, default_value="6")]
+        #[clap(long, default_value="6")]
         /// GPIO pin index
         pin: u8,
 
-        #[structopt(long)]
+        #[clap(long)]
         /// GPIO pin mode to set
         mode: Option<GpioMode>,
     },
     /// Transfer (write-read) to an attached SPI device
     SpiTransfer {
-        #[structopt(parse(try_from_str=parse_hex_str))]
+        #[clap(value_parser=parse_hex_str)]
         /// Data to write (in hex)
         data: Data,
 
-        #[structopt(flatten)]
+        #[clap(flatten)]
         spi_opts: SpiOpts,
     },
     /// Write to an attached SPI device
     SpiWrite {
-        #[structopt(parse(try_from_str=parse_hex_str))]
+        #[clap(value_parser=parse_hex_str)]
         /// Data to write (in hex)
         data: Data,
 
-        #[structopt(flatten)]
+        #[clap(flatten)]
         spi_opts: SpiOpts,
     },
     /// Test interaction with the CP2130 device
     Test(TestOpts)
 }
 
-#[derive(Clone, Debug, PartialEq, StructOpt)]
+#[derive(Clone, Debug, PartialEq, Parser)]
 pub struct SpiOpts {
-    #[structopt(long, default_value="0")]
+    #[clap(long, default_value="0")]
     /// SPI Channel
     channel: u8,
 
-    #[structopt(long, default_value="0")]
+    #[clap(long, default_value="0")]
     /// SPI CS gpio index
     cs_pin: u8,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct TestOpts {
-    #[structopt(long, default_value="0")]
+    #[clap(long, default_value="0")]
     /// Pin for GPIO write
     write_pin: u8,
 
-    #[structopt(long, default_value="1")]
+    #[clap(long, default_value="1")]
     /// Pin for GPIO read
     read_pin: u8,
 }
@@ -125,7 +125,7 @@ fn parse_hex_str(src: &str) -> Result<Vec<u8>, hex::FromHexError> {
 
 
 fn main() {
-    let opts = Options::from_args();
+    let opts = Options::parse();
 
     // Setup logging
     TermLogger::init(opts.level, simplelog::Config::default(), TerminalMode::Mixed).unwrap();
@@ -166,7 +166,7 @@ fn main() {
 
             let mut buff = data.clone();
             
-            spi.transfer_inplace(&mut buff).unwrap();
+            spi.transfer_in_place(&mut buff).unwrap();
 
             cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
 

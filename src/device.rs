@@ -171,13 +171,13 @@ struct Endpoint {
 
 /// Options for creating a device instance
 #[derive(Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 pub struct UsbOptions {
-    #[cfg_attr(feature = "structopt", structopt(long))]
+    #[cfg_attr(feature = "clap", clap(long))]
     /// Detach kernel driver if required
     pub detach_kernel_driver: bool,
 
-    #[cfg_attr(feature = "structopt", structopt(long))]
+    #[cfg_attr(feature = "clap", clap(long))]
     /// Attempt to claim interface
     pub claim_interface: bool,
 }

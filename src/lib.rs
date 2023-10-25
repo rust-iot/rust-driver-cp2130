@@ -3,7 +3,7 @@
 //! 
 //! Copyright 2019 Ryan Kurte
 
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, time::{Instant, Duration}};
 
 #[macro_use]
 extern crate log;
@@ -145,7 +145,7 @@ impl Cp2130 {
 }
 
 /// Underlying device functions
-impl  Device for Cp2130 {
+impl Device for Cp2130 {
     fn spi_read(&self, buff: &mut [u8]) -> Result<usize, Error> {
         let mut inner = self.inner.lock().unwrap();
         inner.spi_read(buff)
@@ -189,60 +189,50 @@ pub struct Spi {
     inner: Arc<Mutex<Inner>>,
 }
 
+use embedded_hal::spi::Operation as SpiOp;
 
-impl embedded_hal::spi::blocking::Transfer<u8> for Spi {
+impl embedded_hal::spi::SpiDevice<u8> for Spi {
+
+    fn transaction(&mut self, operations: &mut [SpiOp<'_, u8>]) -> Result<(), Self::Error> {
+        for o in operations {
+            match o {
+                SpiOp::Write(w) => self.write(w)?,
+                SpiOp::Transfer(r, w) => self.transfer(r, w)?,
+                SpiOp::TransferInPlace(b) => self.transfer_in_place(b)?,
+                SpiOp::Read(r) => self.read(r)?,
+                SpiOp::DelayUs(us) => {
+                    let now = Instant::now();
+                    while now.elapsed() < Duration::from_micros(*us as u64) {}
+                }
+            }
+        }
+
+        Ok(())
+    }
+    
+    fn read(&mut self, buff: &mut [u8] ) -> Result<(), Self::Error> {
+        let out = vec![0u8; buff.len()];
+        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
+        Ok(())
+    }
+
+    fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
+        let _n = self.inner.lock().unwrap().spi_write(words)?;
+        Ok(())
+    }
 
     fn transfer<'w>(&mut self, buff: &'w mut [u8], out: &'w [u8]) -> Result<(), Self::Error> {
         let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
         Ok(())
     }
-}
 
-impl embedded_hal::spi::blocking::TransferInplace<u8> for Spi {
-
-    fn transfer_inplace<'w>(&mut self, buff: &'w mut [u8]) -> Result<(), Self::Error> {
+    fn transfer_in_place<'w>(&mut self, buff: &'w mut [u8]) -> Result<(), Self::Error> {
         let out = buff.to_vec();
         let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
         Ok(())
     }
 }
 
-
-impl embedded_hal::spi::blocking::Write<u8> for Spi {
-
-    fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
-        let _n = self.inner.lock().unwrap().spi_write(words)?;
-        Ok(())
-    }
-}
-
-impl embedded_hal::spi::blocking::Read<u8> for Spi {
-
-    fn read(&mut self, buff: &mut [u8] ) -> Result<(), Self::Error> {
-        let out = vec![0u8; buff.len()];
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
-        Ok(())
-    }
-}
-
-use embedded_hal::spi::blocking::{Operation, Read as _, Write as _, Transfer as _, TransferInplace};
-
-/// Default impl for transactional SPI
-impl embedded_hal::spi::blocking::Transactional<u8> for Spi {
-
-    fn exec<'a>(&mut self, operations: &mut [Operation<'a, u8>]) -> Result<(), Self::Error> {
-        for o in operations {
-            match o {
-                Operation::Write(w) => self.write(w)?,
-                Operation::Transfer(r, w) => self.transfer(r, w)?,
-                Operation::TransferInplace(b) => self.transfer_inplace(b)?,
-                Operation::Read(r) => self.read(r)?,
-            }
-        }
-
-        Ok(())
-    }
-}
 
 impl embedded_hal::spi::ErrorType for Spi {
     type Error = Error;
@@ -259,7 +249,7 @@ pub struct InputPin {
     inner: Arc<Mutex<Inner>>,
 }
 
-impl  embedded_hal::digital::blocking::InputPin for InputPin {
+impl  embedded_hal::digital::InputPin for InputPin {
     fn is_high(&self) -> Result<bool, Self::Error> {
         self.inner.lock().unwrap().get_gpio_level(self.index)
     }
@@ -274,6 +264,12 @@ impl embedded_hal::digital::ErrorType for InputPin {
     type Error = Error;
 }
 
+impl embedded_hal::digital::Error for Error {
+    fn kind(&self) -> embedded_hal::digital::ErrorKind {
+        embedded_hal::digital::ErrorKind::Other
+    }
+}
+
 /// OutputPin object implements embedded-hal OutputPin traits for the CP2130
 pub struct OutputPin {
     index: u8,
@@ -281,7 +277,7 @@ pub struct OutputPin {
     inner: Arc<Mutex<Inner>>,
 }
 
-impl  embedded_hal::digital::blocking::OutputPin for OutputPin {
+impl embedded_hal::digital::OutputPin for OutputPin {
     fn set_high(&mut self) -> Result<(), Self::Error> {
         self.inner.lock().unwrap().set_gpio_mode_level(self.index, self.mode, GpioLevel::High)
     }
