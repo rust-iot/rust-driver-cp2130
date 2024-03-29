@@ -200,9 +200,9 @@ impl embedded_hal::spi::SpiDevice<u8> for Spi {
                 SpiOp::Transfer(r, w) => self.transfer(r, w)?,
                 SpiOp::TransferInPlace(b) => self.transfer_in_place(b)?,
                 SpiOp::Read(r) => self.read(r)?,
-                SpiOp::DelayUs(us) => {
+                SpiOp::DelayNs(ns) => {
                     let now = Instant::now();
-                    while now.elapsed() < Duration::from_micros(*us as u64) {}
+                    while now.elapsed() < Duration::from_nanos(*ns as u64) {}
                 }
             }
         }
@@ -250,11 +250,11 @@ pub struct InputPin {
 }
 
 impl  embedded_hal::digital::InputPin for InputPin {
-    fn is_high(&self) -> Result<bool, Self::Error> {
+    fn is_high(&mut self) -> Result<bool, Self::Error> {
         self.inner.lock().unwrap().get_gpio_level(self.index)
     }
 
-    fn is_low(&self) -> Result<bool, Self::Error> {
+    fn is_low(&mut self) -> Result<bool, Self::Error> {
         let v = self.is_high()?;
         Ok(!v)
     }

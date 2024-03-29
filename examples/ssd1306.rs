@@ -11,7 +11,6 @@ use embedded_graphics::{
 use linux_embedded_hal::Delay;
 
 use ssd1306::{prelude::*, Ssd1306};
-use embedded_hal_compat::{ReverseCompat as _};
 
 fn main() {
     // Find matching devices
