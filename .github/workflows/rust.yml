@@ -70,7 +70,7 @@ jobs:
 
     - name: Install libusb (apt armv7)
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'armv7-unknown-linux-gnueabihf' }}
-      uses: ryankurte/action-apt@v0.3.0
+      uses: ryankurte/action-apt@v0.4.1
       with:
         arch: armhf
         packages: libusb-1.0-0:armhf libusb-1.0-0-dev:armhf
