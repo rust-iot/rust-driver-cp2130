@@ -11,10 +11,12 @@ use std::num::ParseIntError;
 #[cfg(feature = "clap")]
 use clap::Parser;
 
+use log::{trace, debug, error};
+
 use crate::Error;
 use crate::device::{VID, PID};
 
-lazy_static!{
+lazy_static::lazy_static!{
     // LibUSB context created automagically
     static ref CONTEXT: UsbContext = {
         UsbContext::new().unwrap()

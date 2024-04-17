@@ -6,7 +6,7 @@ description = "libusb based driver for the CP2130 USB-SPI bridge by Silicon Labs
 repository = "https://github.com/ryankurte/rust-driver-cp2130"
 keywords = [ "driver", "cp2130", "usb", "spi", "embedded" ]
 license = "MPL-2.0"
-edition = "2018"
+edition = "2021"
 
 [features]
 util = [ "clap", "simplelog", "rand", "hex" ]
@@ -14,14 +14,14 @@ examples = []
 default = [ "util" ]
 
 [dependencies]
-embedded-hal = { version = "1.0.0-rc.1" }
+embedded-hal = { version = "1.0.0" }
 
 libc = "0.2.66"
 log = "0.4.8"
 bitflags = "1.2.1"
 byteorder = "1.3.2"
 lazy_static = "1.4.0"
-failure = "0.1.7"
+thiserror = "1.0.58"
 rusb = "0.9.0"
 
 clap = { version = "4.4.7", optional = true, features = [ "derive", "env" ] }
@@ -30,10 +30,10 @@ hex = { version = "0.4.2", optional = true }
 rand = { version = "0.8.0", optional = true }
 
 [dev-dependencies]
-ssd1306 = "0.7.0"
-embedded-graphics = "0.7.1"
-linux-embedded-hal = "0.3.0"
-embedded-hal-compat = "0.4.0"
+ssd1306 = "0.8.4"
+embedded-graphics = "0.8.1"
+linux-embedded-hal = "0.4.0"
+#embedded-hal-compat = "0.12.0"
 
 [[bin]]
 name = "cp2130-util"

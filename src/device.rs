@@ -8,6 +8,7 @@ use std::str::FromStr;
 
 use byteorder::{LE, BE, ByteOrder};
 use bitflags::bitflags;
+use log::{trace, debug, error};
 
 use rusb::{Device as UsbDevice, Context as UsbContext, DeviceDescriptor, DeviceHandle, Direction, TransferType};
 
@@ -155,7 +156,7 @@ pub(crate) struct Inner {
 /// TODO: given it's one device this could all be hard-coded
 #[derive(Debug)]
 struct Endpoints {
-    control: Endpoint,
+    _control: Endpoint,
     read: Endpoint,
     write: Endpoint,
 }
@@ -328,7 +329,7 @@ impl Inner {
         handle.set_active_configuration(read.config)?;
         
         // Build endpoints
-        let endpoints = Endpoints{control, write, read};
+        let endpoints = Endpoints{_control: control, write, read};
         Ok((Inner{_device: device, handle, endpoints, gpio_allocated: [false; 11], spi_clock: SpiClock::Clock12Mhz}, info))
     }
 }

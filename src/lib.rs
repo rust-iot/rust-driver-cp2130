@@ -5,14 +5,6 @@
 
 use std::{sync::{Arc, Mutex}, time::{Instant, Duration}};
 
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-use failure::Fail;
-
 pub use embedded_hal::spi::{Mode as SpiMode};
 use rusb::{Device as UsbDevice, Context as UsbContext, DeviceDescriptor};
 
@@ -24,24 +16,24 @@ pub use crate::device::{UsbOptions, GpioMode, GpioLevel, SpiConfig, SpiClock};
 use crate::device::*;
 
 
-#[derive(Debug, Fail)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 //    Io(IoError),
-    #[fail(display = "USB error: {:?}", 0)]
+    #[error("USB error: {0}")]
     Usb(rusb::Error),
 
-    #[fail(display = "No matching endpoint languages found")]
+    #[error("No matching endpoint languages found")]
     NoLanguages,
 
-    #[fail(display = "No valid endpoint configuration found")]
+    #[error("No valid endpoint configuration found")]
     Configurations,
-    #[fail(display = "No matching endpoint found")]
+    #[error("No matching endpoint found")]
     Endpoint,
-    #[fail(display = "GPIO pin already in use")]
+    #[error("GPIO pin already in use")]
     GpioInUse,
-    #[fail(display = "Invalid SPI index")]
+    #[error("Invalid SPI index")]
     InvalidIndex,
-    #[fail(display = "Invalid SPI baud rate")]
+    #[error("Invalid SPI baud rate")]
     InvalidBaud,
 }
 
@@ -200,9 +192,9 @@ impl embedded_hal::spi::SpiDevice<u8> for Spi {
                 SpiOp::Transfer(r, w) => self.transfer(r, w)?,
                 SpiOp::TransferInPlace(b) => self.transfer_in_place(b)?,
                 SpiOp::Read(r) => self.read(r)?,
-                SpiOp::DelayUs(us) => {
+                SpiOp::DelayNs(ns) => {
                     let now = Instant::now();
-                    while now.elapsed() < Duration::from_micros(*us as u64) {}
+                    while now.elapsed() < Duration::from_nanos(*ns as u64) {}
                 }
             }
         }
@@ -250,11 +242,11 @@ pub struct InputPin {
 }
 
 impl  embedded_hal::digital::InputPin for InputPin {
-    fn is_high(&self) -> Result<bool, Self::Error> {
+    fn is_high(&mut self) -> Result<bool, Self::Error> {
         self.inner.lock().unwrap().get_gpio_level(self.index)
     }
 
-    fn is_low(&self) -> Result<bool, Self::Error> {
+    fn is_low(&mut self) -> Result<bool, Self::Error> {
         let v = self.is_high()?;
         Ok(!v)
     }
