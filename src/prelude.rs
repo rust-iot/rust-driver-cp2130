@@ -1,9 +1,7 @@
+pub use embedded_hal::spi::Mode as SpiMode;
 
-pub use embedded_hal::spi::{Mode as SpiMode};
+pub use crate::{Cp2130, Device, Error as Cp2130Error, InputPin, OutputPin, Spi};
 
-pub use crate::{Cp2130, Device, Spi, InputPin, OutputPin, Error as Cp2130Error};
+pub use crate::device::{GpioLevel, GpioMode, SpiClock, SpiConfig, UsbOptions};
 
-pub use crate::device::{UsbOptions, GpioMode, GpioLevel, SpiConfig, SpiClock};
-
-pub use crate::manager::{Manager, Filter};
-
+pub use crate::manager::{Filter, Manager};

@@ -1,16 +1,19 @@
 //! CP2130 Driver Device Definitions
-//! 
-//! 
+//!
+//!
 //! Copyright 2019 Ryan Kurte
 
-use std::time::{Duration, SystemTime};
 use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 
-use byteorder::{LE, BE, ByteOrder};
 use bitflags::bitflags;
-use log::{trace, debug, error};
+use byteorder::{ByteOrder, BE, LE};
+use log::{debug, error, trace};
 
-use rusb::{Device as UsbDevice, Context as UsbContext, DeviceDescriptor, DeviceHandle, Direction, TransferType};
+use rusb::{
+    Context as UsbContext, Device as UsbDevice, DeviceDescriptor, DeviceHandle, Direction,
+    TransferType,
+};
 
 use embedded_hal::spi::{Mode as SpiMode, Phase, Polarity, MODE_0};
 
@@ -22,7 +25,6 @@ pub struct Info {
     product: String,
     serial: String,
 }
-
 
 /// CP2130 command enumeration
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -72,7 +74,6 @@ bitflags!(
     }
 );
 
-
 bitflags!(
     /// Gpio PIN masks for multiple pin operations
     /// The endianness of this varies depending on where it is used...
@@ -108,7 +109,9 @@ impl FromStr for GpioMode {
             "input" => Ok(Self::Input),
             "open-drain" => Ok(Self::OpenDrain),
             "push-pull" => Ok(Self::PushPull),
-            _ => Err(format!("Unrecognised GPIO mode, try 'input', 'open-drain', or 'push-pull'")),
+            _ => Err(format!(
+                "Unrecognised GPIO mode, try 'input', 'open-drain', or 'push-pull'"
+            )),
         }
     }
 }
@@ -135,9 +138,9 @@ impl FromStr for GpioLevel {
 /// Transfer command enumeration
 #[derive(Debug, PartialEq, Clone)]
 pub enum TransferCommand {
-    Read        = 0x00,
-    Write       = 0x01,
-    WriteRead   = 0x02,
+    Read = 0x00,
+    Write = 0x01,
+    WriteRead = 0x02,
     ReadWithRTR = 0x04,
 }
 
@@ -167,7 +170,7 @@ struct Endpoint {
     config: u8,
     iface: u8,
     setting: u8,
-    address: u8
+    address: u8,
 }
 
 /// Options for creating a device instance
@@ -206,15 +209,19 @@ impl Default for UsbOptions {
 
 impl Inner {
     /// Create a new CP2130 instance from a libusb device and descriptor
-    pub fn new(device: UsbDevice<UsbContext>, descriptor: DeviceDescriptor, opts: UsbOptions) -> Result<(Self, Info), Error> {
+    pub fn new(
+        device: UsbDevice<UsbContext>,
+        descriptor: DeviceDescriptor,
+        opts: UsbOptions,
+    ) -> Result<(Self, Info), Error> {
         let timeout = Duration::from_millis(200);
-        
+
         // Fetch device handle
         let mut handle = match device.open() {
             Ok(v) => v,
             Err(e) => {
                 error!("Opening device: {}", e);
-                return Err(Error::Usb(e))
+                return Err(Error::Usb(e));
             }
         };
 
@@ -230,7 +237,7 @@ impl Inner {
 
         // Check a language is available
         if languages.len() == 0 {
-            return Err(Error::NoLanguages)
+            return Err(Error::NoLanguages);
         }
 
         // Fetch information
@@ -238,23 +245,26 @@ impl Inner {
         let manufacturer = handle.read_manufacturer_string(language, &descriptor, timeout)?;
         let product = handle.read_product_string(language, &descriptor, timeout)?;
         let serial = handle.read_serial_number_string(language, &descriptor, timeout)?;
-        let info = Info{manufacturer, product, serial};
+        let info = Info {
+            manufacturer,
+            product,
+            serial,
+        };
 
         // Check at least one configuration exists
         if descriptor.num_configurations() != 1 {
             error!("Unexpected number of configurations");
-            return Err(Error::Configurations)
+            return Err(Error::Configurations);
         }
 
         // Connect to endpoints
         let config_desc = device.config_descriptor(0)?;
-        
+
         let (mut write, mut read) = (None, None);
 
         for interface in config_desc.interfaces() {
             for interface_desc in interface.descriptors() {
                 for endpoint_desc in interface_desc.endpoint_descriptors() {
-
                     // Create an endpoint container
                     let e = Endpoint {
                         config: config_desc.number(),
@@ -292,10 +302,10 @@ impl Inner {
                 true => {
                     debug!("Detaching kernel driver");
                     handle.detach_kernel_driver(control.iface)?;
-                },
+                }
                 false => {
                     debug!("Kernel driver inactive");
-                },
+                }
             }
         } else {
             debug!("Skipping kernel driver attach check");
@@ -314,7 +324,7 @@ impl Inner {
             Some(c) => c,
             None => {
                 error!("No write endpoint found");
-                return Err(Error::Endpoint)
+                return Err(Error::Endpoint);
             }
         };
         handle.set_active_configuration(write.config)?;
@@ -323,14 +333,27 @@ impl Inner {
             Some(c) => c,
             None => {
                 error!("No read endpoint found");
-                return Err(Error::Endpoint)
+                return Err(Error::Endpoint);
             }
         };
         handle.set_active_configuration(read.config)?;
-        
+
         // Build endpoints
-        let endpoints = Endpoints{_control: control, write, read};
-        Ok((Inner{_device: device, handle, endpoints, gpio_allocated: [false; 11], spi_clock: SpiClock::Clock12Mhz}, info))
+        let endpoints = Endpoints {
+            _control: control,
+            write,
+            read,
+        };
+        Ok((
+            Inner {
+                _device: device,
+                handle,
+                endpoints,
+                gpio_allocated: [false; 11],
+                spi_clock: SpiClock::Clock12Mhz,
+            },
+            info,
+        ))
     }
 }
 
@@ -351,9 +374,9 @@ pub const SPI_OP_DELAY_US: u64 = 100;
 impl SpiClock {
     pub fn freq(&self) -> u64 {
         match self {
-            SpiClock::Clock12Mhz  => 12_000_000,
-            SpiClock::Clock6MHz   => 6_000_000,
-            SpiClock::Clock3MHz   => 3_000_000,
+            SpiClock::Clock12Mhz => 12_000_000,
+            SpiClock::Clock6MHz => 6_000_000,
+            SpiClock::Clock3MHz => 3_000_000,
             SpiClock::Clock1_5MHz => 1_500_000,
             SpiClock::Clock750KHz => 750_000,
             SpiClock::Clock375MHz => 375_000,
@@ -369,7 +392,7 @@ impl SpiClock {
 impl std::convert::TryFrom<usize> for SpiClock {
     type Error = Error;
 
-   fn try_from(v: usize) -> Result<Self, Self::Error> {
+    fn try_from(v: usize) -> Result<Self, Self::Error> {
         match v {
             12_000_000 => Ok(SpiClock::Clock12Mhz),
             6_000_000 => Ok(SpiClock::Clock6MHz),
@@ -416,8 +439,8 @@ pub struct SpiDelays {
 
 #[derive(PartialEq, Clone)]
 pub struct SpiConfig {
-    pub clock: SpiClock, 
-    pub spi_mode: SpiMode, 
+    pub clock: SpiClock,
+    pub spi_mode: SpiMode,
     pub cs_mode: CsMode,
     pub cs_pin_mode: GpioMode,
     pub delays: SpiDelays,
@@ -435,17 +458,17 @@ impl Default for SpiConfig {
                 pre_deassert: 0,
                 post_assert: 0,
                 inter_byte: 0,
-            }
+            },
         }
     }
 }
 
-
-
-impl Inner{
-
+impl Inner {
     pub(crate) fn spi_configure(&mut self, channel: u8, config: SpiConfig) -> Result<(), Error> {
-        debug!("Setting SPI channel: {:?} clock: {:?} cs mode: {:?}", channel, config.clock, config.cs_mode);
+        debug!(
+            "Setting SPI channel: {:?} clock: {:?} cs mode: {:?}",
+            channel, config.clock, config.cs_mode
+        );
 
         // Set SPI channel configuration
         self.set_spi_word(channel, config.clock, config.spi_mode, config.cs_pin_mode)?;
@@ -459,8 +482,13 @@ impl Inner{
         Ok(())
     }
 
-    pub(crate) fn set_spi_word(&mut self, channel: u8, clock: SpiClock, spi_mode: SpiMode, cs_pin_mode: GpioMode) -> Result<(), Error> {
-
+    pub(crate) fn set_spi_word(
+        &mut self,
+        channel: u8,
+        clock: SpiClock,
+        spi_mode: SpiMode,
+        cs_pin_mode: GpioMode,
+    ) -> Result<(), Error> {
         let mut flags = 0;
 
         if let Phase::CaptureOnSecondTransition = spi_mode.phase {
@@ -479,17 +507,15 @@ impl Inner{
 
         debug!("Set SPI word: 0x{:02x?}", flags);
 
-        let cmd = [
-            channel,
-            flags
-        ];
+        let cmd = [channel, flags];
 
         self.handle.write_control(
-            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(),
             Commands::SetSpiWord as u8,
-            0, 0,
+            0,
+            0,
             &cmd,
-            Duration::from_millis(200)
+            Duration::from_millis(200),
         )?;
 
         self.spi_clock = clock;
@@ -498,20 +524,19 @@ impl Inner{
     }
 
     pub(crate) fn reset(&mut self) -> Result<(), Error> {
-
         self.handle.write_control(
-            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(),
             Commands::ResetDevice as u8,
-            0, 0,
+            0,
+            0,
             &[],
-            Duration::from_millis(200)
+            Duration::from_millis(200),
         )?;
 
         Ok(())
     }
 
     pub(crate) fn set_spi_delay(&mut self, channel: u8, delays: SpiDelays) -> Result<(), Error> {
-
         let cmd = [
             channel,
             delays.mask.bits(),
@@ -521,29 +546,31 @@ impl Inner{
         ];
 
         self.handle.write_control(
-            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(),
             Commands::SetSpiDelay as u8,
-            0, 0,
+            0,
+            0,
             &cmd,
-            Duration::from_millis(200)
+            Duration::from_millis(200),
         )?;
 
         Ok(())
     }
 
-    pub(crate) fn set_gpio_chip_select(&mut self, channel: u8, cs_mode: CsMode) -> Result<(), Error> {
-
-        let cmd = [
-            channel,
-            cs_mode as u8,
-        ];
+    pub(crate) fn set_gpio_chip_select(
+        &mut self,
+        channel: u8,
+        cs_mode: CsMode,
+    ) -> Result<(), Error> {
+        let cmd = [channel, cs_mode as u8];
 
         self.handle.write_control(
-            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(),
             Commands::SetGpioChipSelect as u8,
-            0, 0,
+            0,
+            0,
             &cmd,
-            Duration::from_millis(200)
+            Duration::from_millis(200),
         )?;
 
         Ok(())
@@ -554,7 +581,6 @@ impl Inner{
         let mut cmd = [0u8; 8];
         cmd[2] = TransferCommand::Read as u8;
         LE::write_u32(&mut cmd[4..], buff.len() as u32);
-
 
         trace!("SPI read (cmd: {:?})", cmd);
 
@@ -578,7 +604,7 @@ impl Inner{
 
             let n = self.handle.read_bulk(
                 self.endpoints.read.address,
-                &mut buff[index..index+remainder],
+                &mut buff[index..index + remainder],
                 Duration::from_millis(200),
             )?;
 
@@ -592,7 +618,6 @@ impl Inner{
 
     /// Write to the SPI device
     pub(crate) fn spi_write(&mut self, buff: &[u8]) -> Result<(), Error> {
-
         let mut cmd = vec![0u8; buff.len() + 8];
 
         cmd[2] = TransferCommand::Write as u8;
@@ -625,8 +650,11 @@ impl Inner{
     }
 
     // Transfer (write-read) to and from the SPI device
-    pub(crate) fn spi_write_read(&mut self, buff_out: &[u8], buff_in: &mut [u8]) -> Result<usize, Error> {
-
+    pub(crate) fn spi_write_read(
+        &mut self,
+        buff_out: &[u8],
+        buff_in: &mut [u8],
+    ) -> Result<usize, Error> {
         let mut cmd = vec![0u8; buff_out.len() + 8];
 
         // TODO: split this into while loop so long packet writes work correctly
@@ -636,7 +664,11 @@ impl Inner{
         (&mut cmd[8..]).copy_from_slice(buff_out);
 
         let total_time = self.spi_clock.transfer_time(buff_out.len() as u64);
-        trace!("SPI transfer (cmd: {:?} time: {} us)", cmd, total_time.as_micros());
+        trace!(
+            "SPI transfer (cmd: {:?} time: {} us)",
+            cmd,
+            total_time.as_micros()
+        );
 
         self.handle.write_bulk(
             self.endpoints.write.address,
@@ -656,13 +688,18 @@ impl Inner{
             };
 
             let t = self.spi_clock.transfer_time(buff_out.len() as u64);
-            
-            trace!("SPI read (len: {}, index: {}, rem: {}, time: {} us)", 
-                    buff_in.len(), index, remainder, t.as_micros());
+
+            trace!(
+                "SPI read (len: {}, index: {}, rem: {}, time: {} us)",
+                buff_in.len(),
+                index,
+                remainder,
+                t.as_micros()
+            );
 
             let n = self.handle.read_bulk(
                 self.endpoints.read.address,
-                &mut buff_in[index..index+remainder],
+                &mut buff_in[index..index + remainder],
                 Duration::from_millis(200),
             )?;
 
@@ -682,11 +719,12 @@ impl Inner{
         let mut buff = [0u8; 2];
 
         self.handle.read_control(
-            (RequestType::DEVICE_TO_HOST | RequestType::TYPE_VENDOR).bits(), 
+            (RequestType::DEVICE_TO_HOST | RequestType::TYPE_VENDOR).bits(),
             Commands::GetReadOnlyVersion as u8,
-            0, 0,
+            0,
+            0,
             &mut buff,
-            Duration::from_millis(200)
+            Duration::from_millis(200),
         )?;
 
         let version = LE::read_u16(&buff);
@@ -695,23 +733,31 @@ impl Inner{
     }
 
     /// Set the mode and level for a given GPIO pin
-    pub(crate) fn set_gpio_mode_level(&mut self, pin: u8, mode: GpioMode, level: GpioLevel) -> Result<(), Error> {
+    pub(crate) fn set_gpio_mode_level(
+        &mut self,
+        pin: u8,
+        mode: GpioMode,
+        level: GpioLevel,
+    ) -> Result<(), Error> {
         assert!(pin <= 10);
-        
-        let cmd = [
-            pin,
-            mode as u8,
-            level as u8,
-        ];
 
-        trace!("GPIO set pin: {} mode: {:?} level: {:?} (cmd: {:?})", pin, mode, level, cmd);
+        let cmd = [pin, mode as u8, level as u8];
+
+        trace!(
+            "GPIO set pin: {} mode: {:?} level: {:?} (cmd: {:?})",
+            pin,
+            mode,
+            level,
+            cmd
+        );
 
         self.handle.write_control(
-            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(), 
+            (RequestType::HOST_TO_DEVICE | RequestType::TYPE_VENDOR).bits(),
             Commands::SetGpioModeAndLevel as u8,
-            0, 0,
+            0,
+            0,
             &cmd,
-            Duration::from_millis(200)
+            Duration::from_millis(200),
         )?;
 
         Ok(())
@@ -722,11 +768,12 @@ impl Inner{
         let mut buff = [0u8; 2];
 
         self.handle.read_control(
-            (RequestType::DEVICE_TO_HOST | RequestType::TYPE_VENDOR).bits(), 
+            (RequestType::DEVICE_TO_HOST | RequestType::TYPE_VENDOR).bits(),
             Commands::GetGpioValues as u8,
-            0, 0,
+            0,
+            0,
             &mut buff,
-            Duration::from_millis(200)
+            Duration::from_millis(200),
         )?;
 
         // Inexplicably big endian here
@@ -738,7 +785,7 @@ impl Inner{
     }
 
     /// Fetch the value for a given GPIO pin
-    pub (crate) fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
+    pub(crate) fn get_gpio_level(&mut self, pin: u8) -> Result<bool, Error> {
         assert!(pin <= 10);
 
         let levels = self.get_gpio_values()?;
@@ -761,5 +808,3 @@ impl Inner{
         Ok(v)
     }
 }
-
-

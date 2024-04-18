@@ -1,11 +1,9 @@
-
 extern crate driver_cp2130;
 use driver_cp2130::prelude::*;
 
 #[test]
 #[ignore]
 fn integration() {
-
     // Find matching devices
     let (device, descriptor) = Manager::device(Filter::default(), 0).unwrap();
 
@@ -16,5 +14,3 @@ fn integration() {
 
     let _ = &mut cp2130;
 }
-
-
