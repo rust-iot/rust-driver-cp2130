@@ -160,28 +160,20 @@ fn main() {
         Command::SpiTransfer{data, spi_opts} => {
             info!("Transmit: {}", hex::encode(&data));
 
-            let mut spi = cp2130.spi(spi_opts.channel, SpiConfig::default()).unwrap();
-
-            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+            let mut spi = cp2130.spi(spi_opts.channel, SpiConfig::default(), Some(spi_opts.cs_pin)).unwrap();
 
             let mut buff = data.clone();
             
             spi.transfer_in_place(&mut buff).unwrap();
-
-            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
 
             info!("Received: {}", hex::encode(buff));
         },
         Command::SpiWrite{data, spi_opts} => {
             info!("Transmit: {}", hex::encode(&data));
 
-            let mut spi = cp2130.spi(spi_opts.channel, SpiConfig::default()).unwrap();
-
-            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::Low).unwrap();
+            let mut spi = cp2130.spi(spi_opts.channel, SpiConfig::default(), Some(spi_opts.cs_pin)).unwrap();
 
             spi.write(&data).unwrap();
-
-            cp2130.set_gpio_mode_level(spi_opts.cs_pin, GpioMode::PushPull, GpioLevel::High).unwrap();
         },
         Command::Test(opts) => {
             run_tests(&mut cp2130, &opts);

@@ -96,14 +96,19 @@ impl Cp2130 {
         self.inner.lock().unwrap().reset()
     }
 
-    /// Create an SPI connector
-    pub fn spi(&self, channel: u8, config: SpiConfig) -> Result<Spi, Error> {
+    /// Create an SPI connector with an optional CS pin
+    pub fn spi(&self, channel: u8, config: SpiConfig, cs_pin: Option<u8>) -> Result<Spi, Error> {
         let mut inner = self.inner.lock().unwrap();
+
+        // Configure CS pin if provided
+        if let Some(cs) = cs_pin {
+            inner.set_gpio_mode_level(cs, GpioMode::PushPull, GpioLevel::High)?;
+        }
 
         // Configure SPI
         inner.spi_configure(channel, config)?;
 
-        Ok(Spi{inner: self.inner.clone(), _channel: channel})
+        Ok(Spi{inner: self.inner.clone(), _channel: channel, cs: cs_pin})
     }
 
     /// Create a GPIO OutputPin
@@ -178,7 +183,10 @@ impl Device for Cp2130 {
 pub struct Spi {
     // TODO: use channel configuration
     _channel: u8,
+    // Handle for device singleton
     inner: Arc<Mutex<Inner>>,
+    // CS pin index
+    cs: Option<u8>,
 }
 
 use embedded_hal::spi::Operation as SpiOp;
@@ -186,41 +194,54 @@ use embedded_hal::spi::Operation as SpiOp;
 impl embedded_hal::spi::SpiDevice<u8> for Spi {
 
     fn transaction(&mut self, operations: &mut [SpiOp<'_, u8>]) -> Result<(), Self::Error> {
+        let mut i = self.inner.lock().unwrap();
+
+        // Assert CS if available
+        if let Some(cs) = self.cs {
+            i.set_gpio_mode_level(cs, GpioMode::PushPull, GpioLevel::Low)?;
+        }
+
         for o in operations {
-            match o {
-                SpiOp::Write(w) => self.write(w)?,
-                SpiOp::Transfer(r, w) => self.transfer(r, w)?,
-                SpiOp::TransferInPlace(b) => self.transfer_in_place(b)?,
-                SpiOp::Read(r) => self.read(r)?,
+            // Run operation and collect errors
+            let err = match o {
+                SpiOp::Write(w) => {
+                    i.spi_write(w).err()
+                },
+                SpiOp::Transfer(r, w) => { 
+                    i.spi_write_read(w, r).err()
+                },
+                SpiOp::TransferInPlace(b) => {
+                    let out = b.to_vec();
+                    i.spi_write_read(&out, b).err()
+                },
+                SpiOp::Read(r) => {
+                    let out = vec![0u8; r.len()];
+                    i.spi_write_read(&out, r).err()
+                },
                 SpiOp::DelayNs(ns) => {
                     let now = Instant::now();
                     while now.elapsed() < Duration::from_nanos(*ns as u64) {}
+                    None
                 }
+            };
+
+            // Check for errors
+            if let Some(e) = err {
+                // Deassert CS on failure
+                if let Some(cs) = self.cs {
+                    i.set_gpio_mode_level(cs, GpioMode::PushPull, GpioLevel::High)?;
+                }
+
+                // Return error
+                return Err(e)
             }
         }
 
-        Ok(())
-    }
-    
-    fn read(&mut self, buff: &mut [u8] ) -> Result<(), Self::Error> {
-        let out = vec![0u8; buff.len()];
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
-        Ok(())
-    }
+        // Clear CS if enabled
+        if let Some(cs) = self.cs {
+            i.set_gpio_mode_level(cs, GpioMode::PushPull, GpioLevel::Low)?;
+        }
 
-    fn write(&mut self, words: &[u8] ) -> Result<(), Self::Error> {
-        let _n = self.inner.lock().unwrap().spi_write(words)?;
-        Ok(())
-    }
-
-    fn transfer<'w>(&mut self, buff: &'w mut [u8], out: &'w [u8]) -> Result<(), Self::Error> {
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
-        Ok(())
-    }
-
-    fn transfer_in_place<'w>(&mut self, buff: &'w mut [u8]) -> Result<(), Self::Error> {
-        let out = buff.to_vec();
-        let _n = self.inner.lock().unwrap().spi_write_read(&out, buff)?;
         Ok(())
     }
 }
