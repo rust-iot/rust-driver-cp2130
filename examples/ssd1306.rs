@@ -3,15 +3,15 @@
 use driver_cp2130::prelude::*;
 
 use embedded_graphics::{
-    text::Text,
     mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
+    text::Text,
 };
 use linux_embedded_hal::Delay;
 
+use embedded_hal_compat::ReverseCompat as _;
 use ssd1306::{prelude::*, Ssd1306};
-use embedded_hal_compat::{ReverseCompat as _};
 
 fn main() {
     // Find matching devices

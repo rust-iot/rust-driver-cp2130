@@ -1,9 +1,11 @@
 //! CP2130 Driver Device Manager
-//! 
-//! 
+//!
+//!
 //! Copyright 2019 Ryan Kurte
 
-pub use rusb::{Device as UsbDevice, UsbContext as _, Context as UsbContext, DeviceList, DeviceDescriptor};
+pub use rusb::{
+    Context as UsbContext, Device as UsbDevice, DeviceDescriptor, DeviceList, UsbContext as _,
+};
 
 #[cfg(feature = "clap")]
 use std::num::ParseIntError;
@@ -11,12 +13,12 @@ use std::num::ParseIntError;
 #[cfg(feature = "clap")]
 use clap::Parser;
 
-use log::{trace, debug, error};
+use log::{debug, error, trace};
 
+use crate::device::{PID, VID};
 use crate::Error;
-use crate::device::{VID, PID};
 
-lazy_static::lazy_static!{
+lazy_static::lazy_static! {
     // LibUSB context created automagically
     static ref CONTEXT: UsbContext = {
         UsbContext::new().unwrap()
@@ -48,7 +50,7 @@ fn parse_hex(src: &str) -> Result<u16, ParseIntError> {
 
 impl Default for Filter {
     fn default() -> Self {
-        Filter{vid: VID, pid: PID}
+        Filter { vid: VID, pid: PID }
     }
 }
 
@@ -62,14 +64,16 @@ impl Manager {
             Ok(v) => v,
             Err(e) => {
                 error!("Fetching devices: {}", e);
-                return Err(Error::Usb(e))
+                return Err(Error::Usb(e));
             }
         };
 
         Ok(devices)
     }
 
-    pub fn devices_filtered(filter: Filter) -> Result<Vec<(UsbDevice<UsbContext>, DeviceDescriptor)>, Error> {
+    pub fn devices_filtered(
+        filter: Filter,
+    ) -> Result<Vec<(UsbDevice<UsbContext>, DeviceDescriptor)>, Error> {
         let devices = Self::devices()?;
 
         let mut matches = vec![];
@@ -78,31 +82,37 @@ impl Manager {
             // Fetch descriptor
             let device_desc = match device.device_descriptor() {
                 Ok(d) => d,
-                Err(_) => continue
+                Err(_) => continue,
             };
-    
+
             trace!("Device: {:?}", device_desc);
-    
+
             // Check for VID/PID match
             if device_desc.vendor_id() == filter.vid && device_desc.product_id() == filter.pid {
                 matches.push((device, device_desc));
             }
         }
-    
+
         debug!("Found {} matching devices", matches.len());
-    
+
         Ok(matches)
     }
 
-    pub fn device(filter: Filter, index: usize) -> Result<(UsbDevice<UsbContext>, DeviceDescriptor), Error> {
+    pub fn device(
+        filter: Filter,
+        index: usize,
+    ) -> Result<(UsbDevice<UsbContext>, DeviceDescriptor), Error> {
         // Find matching devices
         let mut matches = Self::devices_filtered(filter)?;
 
         // Check index is valid
         if matches.len() < index || matches.len() == 0 {
-            error!("Device index ({}) exceeds number of discovered devices ({})",
-                index, matches.len());
-            return Err(Error::InvalidIndex)
+            error!(
+                "Device index ({}) exceeds number of discovered devices ({})",
+                index,
+                matches.len()
+            );
+            return Err(Error::InvalidIndex);
         }
 
         // Return match
